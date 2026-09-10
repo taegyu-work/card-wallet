@@ -836,9 +836,9 @@
   }
 
   /* ---------- OCR (Claude vision via a Cloudflare Worker) ---------- */
-  // Paste your deployed Worker URL here (see worker/DEPLOY.md).
+  // Deployed Worker URL (see worker/DEPLOY.md).
   // Empty string = no auto-read; the capture flow drops straight to manual entry.
-  var OCR_ENDPOINT = "";
+  var OCR_ENDPOINT = "https://card-wallet-ocr.evertri-hr.workers.dev/";
 
   function ocrConfigured() { return /^https?:\/\//.test(OCR_ENDPOINT); }
 

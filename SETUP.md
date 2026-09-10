@@ -1,10 +1,9 @@
 # Card Wallet — setup & deploy
 
-A digital business-card wallet. Photograph or upload a business card; the app
-reads the text on-device (Tesseract.js OCR, Korean + English), guesses the
-name / title / company / phone / email / address into an editable form, and
-files it in a searchable, installable wallet. Optional Firebase live sync keeps
-every device in step.
+A digital business-card wallet. Photograph or upload a business card; a small
+Cloudflare Worker sends the photo to Claude vision, which reads the name / title /
+department / company / phones / email / address into an editable form, and the
+app files it in a searchable, installable wallet with Firebase live sync.
 
 Built following the personal-PWA pattern (Good Eats, Calorie Counter).
 
@@ -16,6 +15,8 @@ manifest.webmanifest       PWA metadata
 sw.js                       service worker (offline shell + installable)
 icon-192 / 512 / maskable-512 / apple-touch-icon / favicon-32   PNG icons (white ID-card on indigo)
 .nojekyll                   serve files as-is
+worker/card-wallet-ocr.js   the OCR Cloudflare Worker
+worker/DEPLOY.md            how to deploy the Worker + get an Anthropic key
 ```
 
 Nothing to build. Open `index.html` on a static host.
@@ -74,14 +75,21 @@ Full images are stripped from the synced payload; they live at
 
 ## How the OCR works
 
-- `tesseract.js@5` loads from jsDelivr; the Korean + English language data
-  (~15 MB) downloads once and the browser caches it.
-- `parseCard(text)` in `index.html` is a heuristic splitter (regex for email,
-  phone/fax, URL, Korean/English job titles, company suffixes, address tokens).
-  It will get things wrong on busy layouts — every field is editable before you
-  save, and "Show raw scanned text" reveals exactly what the engine saw.
-- Runs fully on-device. No image or text is sent anywhere unless Firebase sync
-  is configured.
+- On capture the app POSTs the photo (JPEG, ~1500 px) to `OCR_ENDPOINT`
+  (a `var` near the top of the classic `<script>` in `index.html`) —
+  the deployed Worker `https://card-wallet-ocr.evertri-hr.workers.dev/`.
+- The Worker (`worker/card-wallet-ocr.js`) calls the Claude API
+  (`claude-haiku-4-5`) with a forced structured-output tool and returns
+  `{ ok, fields: { name, title, department, company, mobile, phone, fax,
+  email, website, address, notes } }`. ~$0.002–0.004 per card.
+- The `ANTHROPIC_API_KEY` lives as a **Worker secret** (Cloudflare dash →
+  the Worker → Settings → Variables and Secrets). CORS is locked to
+  `taegyu-work.github.io` + `localhost:8731`.
+- Every field is editable before you save. Set `OCR_ENDPOINT = ""` to turn
+  auto-read off (capture then drops straight to a manual form).
+- Full deploy/redeploy steps for the Worker: `worker/DEPLOY.md`.
+- An earlier version used on-device Tesseract.js; it was too inaccurate on
+  real phone photos of Korean cards and was removed.
 
 ## Install as an app
 
