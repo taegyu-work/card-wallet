@@ -1,5 +1,5 @@
 /* Card Wallet service worker — offline shell cache. Bump CACHE on every release. */
-var CACHE = "card-wallet-v2";
+var CACHE = "card-wallet-v3";
 var ASSETS = [
   "./",
   "./index.html",
@@ -35,7 +35,7 @@ self.addEventListener("fetch", function (e) {
   var req = e.request;
   if (req.method !== "GET") return;
   var url = new URL(req.url);
-  if (url.origin !== self.location.origin) return; // Firebase / fonts / Tesseract CDN → straight to network
+  if (url.origin !== self.location.origin) return; // Firebase / fonts / OCR Worker → straight to network
 
   var isDoc = req.mode === "navigate" ||
     (req.headers.get("accept") || "").indexOf("text/html") !== -1 ||

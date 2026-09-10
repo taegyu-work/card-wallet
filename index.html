@@ -18,8 +18,6 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js" defer></script>
-
 <style>
   :root {
     --bg: #f2efe8;
@@ -625,11 +623,10 @@
       dzHint: "JPG, PNG or HEIC · you can pick several at once",
       manual: "Enter a card by hand instead",
       queue: "Card {i} of {n}",
-      ocrReady: "Reading the card…",
-      ocrDownloading: "Downloading the text engine (one time)…",
-      ocrDone: "Read complete — check the fields below",
-      ocrFailed: "Couldn't read the card automatically — type the details in",
-      ocrNoEngine: "Text engine unavailable offline — type the details in",
+      ocrReading: "Reading the card…",
+      ocrDone: "Done — check the fields below",
+      ocrFailed: "Couldn't read the card — type the details in",
+      ocrNoEngine: "Card reader isn't set up yet — enter the card by hand",
       lName: "Name", lTitle: "Title", lCompany: "Company", lDept: "Department",
       lMobile: "Mobile", lPhone: "Office", lFax: "Fax", lEmail: "Email",
       lWebsite: "Website", lAddress: "Address", lTags: "Tags", lNote: "Note",
@@ -676,11 +673,10 @@
       dzHint: "JPG, PNG, HEIC · 여러 장 한 번에 선택 가능",
       manual: "직접 입력으로 추가하기",
       queue: "{n}장 중 {i}장째",
-      ocrReady: "명함을 읽는 중…",
-      ocrDownloading: "문자 인식 엔진 내려받는 중(최초 1회)…",
-      ocrDone: "읽기 완료 — 아래 항목을 확인하세요",
-      ocrFailed: "자동으로 읽지 못했어요 — 직접 입력해 주세요",
-      ocrNoEngine: "오프라인이라 인식 엔진을 쓸 수 없어요 — 직접 입력해 주세요",
+      ocrReading: "명함을 읽는 중…",
+      ocrDone: "완료 — 아래 항목을 확인하세요",
+      ocrFailed: "명함을 읽지 못했어요 — 직접 입력해 주세요",
+      ocrNoEngine: "명함 리더가 아직 설정되지 않았어요 — 직접 입력해 주세요",
       lName: "이름", lTitle: "직함", lCompany: "회사", lDept: "부서",
       lMobile: "휴대전화", lPhone: "사무실", lFax: "팩스", lEmail: "이메일",
       lWebsite: "웹사이트", lAddress: "주소", lTags: "태그", lNote: "메모",
@@ -839,169 +835,35 @@
     return new Blob([arr], { type: mime });
   }
 
-  /* ---------- OCR ---------- */
-  var ocrLangLoaded = false;
-  function runOCR(dataURL, onProgress) {
-    if (typeof window.Tesseract === "undefined") return Promise.reject(new Error("no-engine"));
-    return window.Tesseract.recognize(dataURL, "kor+eng", {
-      logger: function (m) {
-        if (m.status === "recognizing text" && onProgress) onProgress(m.progress);
-        if ((m.status || "").indexOf("loading language") === 0 || (m.status || "").indexOf("initializing") === 0) {
-          if (onProgress) onProgress(-1);
-        }
-      }
+  /* ---------- OCR (Claude vision via a Cloudflare Worker) ---------- */
+  // Paste your deployed Worker URL here (see worker/DEPLOY.md).
+  // Empty string = no auto-read; the capture flow drops straight to manual entry.
+  var OCR_ENDPOINT = "";
+
+  function ocrConfigured() { return /^https?:\/\//.test(OCR_ENDPOINT); }
+
+  // returns a Promise resolving to { name, title, department, company, mobile,
+  // phone, fax, email, website, address, notes } — or rejects with an Error
+  function readCard(dataURL) {
+    if (!ocrConfigured()) return Promise.reject(new Error("not-configured"));
+    var ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 45000) : null;
+    return fetch(OCR_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image: dataURL }),
+      signal: ctrl ? ctrl.signal : undefined
     }).then(function (res) {
-      ocrLangLoaded = true;
-      return (res && res.data && res.data.text) ? res.data.text : "";
+      if (timer) clearTimeout(timer);
+      return res.json().then(function (body) {
+        if (!res.ok || !body || body.ok !== true) {
+          throw new Error((body && body.error) || ("reader error " + res.status));
+        }
+        return body.fields || {};
+      });
     });
   }
 
-  var TITLE_RE = /(대표이사|대표|회장|부회장|사장|부사장|전무|상무|이사대우|이사|본부장|사업부장|실장|센터장|소장|팀장|파트장|그룹장|부장|차장|과장|대리|주임|사원|선임연구원|책임연구원|수석연구원|선임|책임|수석|연구원|기사|매니저|팀원|Chief|C\.?E\.?O|C\.?T\.?O|C\.?F\.?O|C\.?O\.?O|President|Vice President|VP|Director|Manager|Head of|Lead|Principal|Senior|Junior|Engineer|Developer|Researcher|Scientist|Consultant|Analyst|Associate|Specialist|Coordinator|Officer|Founder|Partner|Chairman|Advisor|Representative|Sales|Marketing)/i;
-  var COMPANY_RE = /(주식회사|\(주\)|㈜|유한회사|\(유\)|재단법인|사단법인|Inc\.?|Incorporated|Ltd\.?|Limited|L\.?L\.?C|Co\.,?\s*Ltd|Corp\.?|Corporation|Company|Group|Holdings|Partners|Ventures|Capital|Laborator|Institute|Foundation|Technolog|Solutions|Systems|Networks|Pharmaceutical|Biotech|Bio\b|Medical|Hospital|Clinic|University|College|병원|의원|대학교|연구소|연구원|제약|바이오|테크|그룹|파트너스)/i;
-  var ADDR_RE = /(\d+\s*(층|F\b|Floor)|[가-힣]+(시|도)\s|[가-힣]+구\s|[가-힣]+(로|길)\s?\d|[가-힣]+동\s|서울|경기|인천|부산|대구|대전|광주|울산|세종|강원|충북|충남|전북|전남|경북|경남|제주|Korea|Seoul|Gyeonggi|[Ss]treet|\bSt\.|\bAve\.|\bAvenue|\bRoad\b|\bRd\.|\bBldg|\bSuite|\bFloor\b|\bZIP\b)/;
-
-  function cleanLine(s) { return s.replace(/[|·•∙‣▪●※★☆■□▶►]+/g, " ").replace(/\s{2,}/g, " ").trim(); }
-
-  var TITLE_TOKENS = "대표이사|대표|회장|부회장|사장|부사장|전무이사|전무|상무이사|상무|이사대우|이사|감사|고문|본부장|사업부장|부문장|실장|센터장|소장|국장|처장|부장|차장|과장|대리|주임|사원|선임|책임|수석|팀장|파트장|그룹장|매니저|연구원|주치의|원장|교수|약사|간사|위원|위원장";
-  var NAME_TITLE_RE = new RegExp("^([가-힣]{2,4})\\s*[\\/,·|]?\\s*(" + TITLE_TOKENS + ")\\b");
-  var TITLE_NAME_RE = new RegExp("^(" + TITLE_TOKENS + ")\\s+([가-힣]{2,4})$");
-  var TITLE_ONLY_RE = new RegExp("^(" + TITLE_TOKENS + ")$");
-  var DEPT_RE = /([가-힣A-Za-z][가-힣A-Za-z\s]*?(본부|사업부|부문|연구소|연구팀|개발팀|영업팀|마케팅팀|기획팀|사업팀|지원팀|관리팀|팀|실|파트|그룹|센터|Division|Department|Dept\.?|Team|Group|Unit|Office))\b/;
-
-  function parseCard(text) {
-    var out = { name: "", title: "", company: "", dept: "", mobile: "", phone: "", fax: "", email: "", website: "", address: "" };
-    if (!text) return out;
-    var rawLines = text.split(/\r?\n/).map(cleanLine).filter(function (l) { return l.length > 0; });
-    var used = {};
-
-    // ---- email ----
-    var m = text.replace(/\s*@\s*/g, "@").match(/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/);
-    if (m) out.email = m[0].replace(/[.,;]+$/, "");
-
-    // ---- website (same domain as email is fine; skip the email itself / bare email domain) ----
-    var emailDomain = out.email ? out.email.split("@")[1].toLowerCase() : "";
-    var urlRe = /((https?:\/\/)?(www\.)?[A-Za-z0-9][A-Za-z0-9\-]*(\.[A-Za-z0-9\-]+)*\.(com|net|org|io|co|kr|ai|dev|biz|info|me)(\.[a-z]{2})?)(\/[^\s]*)?/gi;
-    var um;
-    while ((um = urlRe.exec(text))) {
-      var cand = um[1].replace(/[.,;)]+$/, "");
-      var before = text.charAt(um.index - 1);
-      if (before === "@" || cand.indexOf("@") !== -1) continue;
-      if (emailDomain && cand.toLowerCase() === emailDomain && !/^(https?:\/\/|www\.)/i.test(um[0])) continue;
-      out.website = cand;
-      break;
-    }
-
-    // ---- phones (handle multiple numbers + fax keyword on one line) ----
-    function tidyPhone(p) {
-      return p.replace(/^[\s:.\-]+/, "").replace(/[\s.\-]+$/, "")
-        .replace(/^(tel|t|m|h\.?p|mobile|cell|phone|office|direct|fax|hp|휴대폰|휴대전화|휴대|전화|팩스|직통)[\s:.\-]*/i, "").trim();
-    }
-    rawLines.forEach(function (l, li) {
-      var low = l.toLowerCase();
-      var faxPos = low.search(/fax|팩스|f\s*[:.]/);
-      var mobPos = low.search(/mobile|cell|\bm\s*[:.]|h\.?p|휴대/);
-      var re = /(\+?\d[\d\s().\-]{6,}\d)/g, mm, found = false;
-      while ((mm = re.exec(l))) {
-        var val = tidyPhone(mm[1]);
-        var digits = val.replace(/\D/g, "");
-        if (digits.length < 8 || digits.length > 13) continue;
-        found = true;
-        var isMobileNum = /^0?1[016789]/.test(digits.replace(/^82/, "0"));
-        var beforeFax = faxPos === -1 || mm.index < faxPos;
-        if (!beforeFax) { if (!out.fax) out.fax = val; }
-        else if (isMobileNum || (mobPos !== -1 && mm.index >= mobPos && faxPos === -1)) { if (!out.mobile) out.mobile = val; }
-        else if (!out.phone) { out.phone = val; }
-        else if (!out.mobile && !isMobileNum) { /* leave */ }
-      }
-      if (found) used[li] = true;
-    });
-
-    // ---- mark used lines for email / website ----
-    if (out.email) rawLines.forEach(function (l, i) { if (l.replace(/\s/g, "").toLowerCase().indexOf(out.email.toLowerCase()) !== -1) used[i] = true; });
-    if (out.website) rawLines.forEach(function (l, i) {
-      if (l.toLowerCase().indexOf(out.website.replace(/^https?:\/\//i, "").toLowerCase()) !== -1 && !/@/.test(l)) used[i] = true;
-    });
-
-    // ---- company ----
-    for (var i = 0; i < rawLines.length; i++) {
-      if (used[i]) continue;
-      if (COMPANY_RE.test(rawLines[i]) && rawLines[i].length <= 44) { out.company = rawLines[i]; used[i] = true; break; }
-    }
-
-    // ---- address (matching line + optional continuation) ----
-    for (var a = 0; a < rawLines.length; a++) {
-      if (used[a]) continue;
-      if (ADDR_RE.test(rawLines[a]) && rawLines[a].length >= 8) {
-        var addr = rawLines[a]; used[a] = true;
-        if (rawLines[a + 1] && !used[a + 1] && !/@|\d{3,}[\s\-]\d{3,}/.test(rawLines[a + 1]) && (ADDR_RE.test(rawLines[a + 1]) || rawLines[a + 1].length < 20)) {
-          addr += " " + rawLines[a + 1]; used[a + 1] = true;
-        }
-        out.address = addr;
-        break;
-      }
-    }
-
-    // ---- department (own line) ----
-    for (var d = 0; d < rawLines.length; d++) {
-      if (used[d]) continue;
-      var dm = rawLines[d].match(DEPT_RE);
-      if (dm && rawLines[d].length <= 40 && !COMPANY_RE.test(rawLines[d])) {
-        out.dept = dm[1].trim(); used[d] = true; break;
-      }
-    }
-
-    // ---- name + title ----
-    function isJobTitle(s) {
-      return TITLE_ONLY_RE.test(s) ||
-        /^(선임|책임|수석|전임|주임|총괄|영업|기술|수석|담당)?(연구원|매니저|팀장|부장|차장|과장|대리|엔지니어|컨설턴트|디렉터|리더|위원)$/.test(s);
-    }
-    // 1) standalone Korean name line (exactly 2-4 hangul, not a job title)
-    for (var n = 0; n < rawLines.length; n++) {
-      if (used[n]) continue;
-      var compact = rawLines[n].replace(/\s/g, "");
-      if (/^[가-힣]{2,4}$/.test(compact) && !isJobTitle(compact) && !COMPANY_RE.test(compact)) {
-        out.name = compact; used[n] = true; break;
-      }
-    }
-    // 2) title line (may also carry the name)
-    for (var t = 0; t < rawLines.length; t++) {
-      if (used[t]) continue;
-      var tl = rawLines[t];
-      if (!TITLE_RE.test(tl) || tl.length > 44) continue;
-      if (!out.name) {
-        var mNT = tl.match(NAME_TITLE_RE), mTN = tl.match(TITLE_NAME_RE);
-        if (mTN && !isJobTitle(mTN[2])) { out.name = mTN[2]; if (!out.title) out.title = mTN[1]; used[t] = true; break; }
-        if (mNT && !isJobTitle(mNT[1])) { out.name = mNT[1]; }
-      }
-      var titlePart = tl.split(/\s*[\/|]\s*/)[0].trim();
-      if (out.name && titlePart.indexOf(out.name) === 0) titlePart = titlePart.slice(out.name.length).replace(/^[\s\/,·|]+/, "").trim();
-      if (!out.title && titlePart) out.title = titlePart;
-      used[t] = true; break;
-    }
-    // 3) English name fallback (two/three capitalised words)
-    if (!out.name) {
-      for (var e = 0; e < rawLines.length; e++) {
-        if (used[e]) continue;
-        var ln = rawLines[e];
-        if (/[@\d]/.test(ln) || COMPANY_RE.test(ln) || ADDR_RE.test(ln)) continue;
-        var words = ln.split(/\s+/);
-        if (words.length >= 2 && words.length <= 3 && words.every(function (w) { return /^[A-Za-z][A-Za-z.\-]*$/.test(w); }) && ln.length <= 30) {
-          out.name = ln; used[e] = true; break;
-        }
-      }
-    }
-
-    // ---- company fallback: a remaining line near the top ----
-    if (!out.company) {
-      for (var c2 = 0; c2 < Math.min(rawLines.length, 5); c2++) {
-        if (used[c2]) continue;
-        var cl = rawLines[c2];
-        if (/@/.test(cl) || cl === out.name || cl === out.address || TITLE_ONLY_RE.test(cl.replace(/\s/g, ""))) continue;
-        if (cl.length >= 2 && cl.length <= 40) { out.company = cl; used[c2] = true; break; }
-      }
-    }
-    return out;
-  }
 
   /* ---------- vCard ---------- */
   function vcard(card) {
@@ -1398,34 +1260,39 @@
       pendingImg = {
         thumb: resizeToDataURL(img, 300, 0.58),
         medium: resizeToDataURL(img, 760, 0.7),
-        ocrSrc: resizeToDataURL(img, 1600, 0.9)
+        ocrSrc: resizeToDataURL(img, 1500, 0.82)
       };
-      // OCR
+
+      if (!ocrConfigured()) { try { $("f-name").focus(); } catch (e) {} return; }
+
+      var myItem = item;
       $("ocr-status").hidden = false;
-      $("ocr-label").textContent = T(ocrLangLoaded ? "ocrReady" : "ocrDownloading");
-      $("ocr-bar-fill").style.width = ocrLangLoaded ? "8%" : "3%";
-      runOCR(pendingImg.ocrSrc, function (p) {
-        if (p < 0) { $("ocr-label").textContent = T("ocrDownloading"); return; }
-        $("ocr-label").textContent = T("ocrReady");
-        $("ocr-bar-fill").style.width = Math.max(8, Math.round(p * 100)) + "%";
-      }).then(function (text) {
+      $("ocr-label").textContent = T("ocrReading");
+      $("ocr-bar-fill").style.width = "45%";
+
+      readCard(pendingImg.ocrSrc).then(function (fields) {
+        if (captureQueue[queueIndex] !== myItem) return;   // user already moved on
         $("ocr-bar-fill").style.width = "100%";
         $("ocr-label").textContent = T("ocrDone");
-        setTimeout(function () { $("ocr-status").hidden = true; }, 1400);
-        var parsed = parseCard(text);
-        FIELDS.forEach(function (f) {
-          if (parsed[f] && !$("f-" + f).value) $("f-" + f).value = parsed[f];
+        setTimeout(function () { $("ocr-status").hidden = true; }, 1200);
+        var map = {
+          name: "name", title: "title", department: "dept", company: "company",
+          mobile: "mobile", phone: "phone", fax: "fax", email: "email",
+          website: "website", address: "address", notes: "note"
+        };
+        Object.keys(map).forEach(function (k) {
+          var v = (fields[k] || "").trim();
+          var el = $("f-" + map[k]);
+          if (v && el && !el.value) el.value = v;
         });
-        if (text) {
-          $("raw-toggle").hidden = false;
-          $("raw-text").textContent = text;
-        }
         var firstEmpty = $("f-name").value ? $("f-company") : $("f-name");
         try { firstEmpty.focus(); } catch (e) {}
       }).catch(function (err) {
+        if (captureQueue[queueIndex] !== myItem) return;
         $("ocr-status").hidden = true;
         $("ocr-label").textContent = "";
-        toast(T(err && err.message === "no-engine" ? "ocrNoEngine" : "ocrFailed"));
+        toast(T(err && err.message === "not-configured" ? "ocrNoEngine" : "ocrFailed"));
+        try { $("f-name").focus(); } catch (e) {}
       });
     });
   }
