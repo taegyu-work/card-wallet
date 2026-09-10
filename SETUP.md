@@ -32,34 +32,33 @@ That alone gives a working, installable app that saves **in that browser only**
 (card fields + thumbnails in `localStorage`, full-size photos in `localStorage`
 too but never leave the device).
 
-## B. Turn on live sync (Firebase — optional)
+## B. Live sync (Firebase) — already set up
 
-Sync shares the wallet across your devices and anyone with the link.
+Project **`card-wallet-a36af`** (console.firebase.google.com), Spark / no-cost plan.
 
-1. **Realtime Database** — create a project (Analytics + Gemini off) → Realtime
-   Database, `us-central1`, locked mode. Rules:
-   ```json
-   { "rules": { "cardWallet": { ".read": "auth != null", ".write": "auth != null" } } }
-   ```
-2. **Authentication** → enable **Anonymous** (+ auto-clean-up).
-3. **Storage** (optional, for full-res card photos) → get started → rules:
-   ```
-   rules_version = '2';
-   service firebase.storage {
-     match /b/{bucket}/o {
-       match /cardWallet/{allPaths=**} {
-         allow read, write: if request.auth != null;
-       }
-     }
-   }
-   ```
-   If Storage isn't available on the free plan, skip it — the app automatically
-   falls back to storing a compressed (~1000 px) copy of each card **inside the
-   Realtime Database** so photos still sync. A few hundred cards is well within
-   the free 1 GB.
-4. **Project settings ▸ Your apps ▸ Web** → register an app → copy the
-   `firebaseConfig` object into the `const CONFIG = { }` block near the bottom of
-   `index.html` (first `<script type="module">`). Re-upload `index.html`.
+- **Realtime Database** `us-central1`
+  (`https://card-wallet-a36af-default-rtdb.firebaseio.com`), rules published:
+  ```json
+  { "rules": { "cardWallet": { ".read": "auth != null", ".write": "auth != null" } } }
+  ```
+- **Authentication** → **Anonymous** enabled, auto-clean-up on (anon accounts > 30 days deleted).
+- **Storage** — *not enabled* (the free plan requires a billing account). The app
+  detects this and stores a compressed (~760 px, ~40–70 KB) copy of each card
+  photo **inside the Realtime Database**, so photos still sync. Fine for a few
+  hundred cards within the free 1 GB. To switch to Storage later: upgrade the
+  project to Blaze, enable Storage with the rule below, and new cards will upload
+  there automatically (old inline photos stay put).
+  ```
+  rules_version = '2';
+  service firebase.storage {
+    match /b/{bucket}/o {
+      match /cardWallet/{allPaths=**} { allow read, write: if request.auth != null; }
+    }
+  }
+  ```
+- The web app config is already pasted into `index.html` (first `<script type="module">`).
+
+Data lives at `cardWallet/cards` = `{ cards: [...], rev, updatedAt }`.
 
 `DB_PATH = "cardWallet/cards"`, sync global `window.CW_SYNC`, event
 `cw-sync-decided`. Payload at `cardWallet/cards` = `{ cards: [...], rev, updatedAt }`.

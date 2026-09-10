@@ -519,8 +519,15 @@
   └───────────────────────────────────────────────────────────────────┘
 -->
 <script type="module">
-  // ▼▼▼ Firebase web config ▼▼▼
+  // ▼▼▼ Firebase web config for project "card-wallet-a36af" ▼▼▼
   const CONFIG = {
+    apiKey: "AIzaSyDnUZTu1wOJH9dMKXpT0NtuFm2TrTIkmoI",
+    authDomain: "card-wallet-a36af.firebaseapp.com",
+    databaseURL: "https://card-wallet-a36af-default-rtdb.firebaseio.com",
+    projectId: "card-wallet-a36af",
+    storageBucket: "card-wallet-a36af.firebasestorage.app",
+    messagingSenderId: "442120113082",
+    appId: "1:442120113082:web:3b80cc1b3f235016c36b83"
   };
   // ▲▲▲ Not secrets — Firebase web configs ship in the browser.
   //     Access is controlled by the database + storage rules. ▲▲▲
@@ -595,7 +602,6 @@
   "use strict";
 
   var DATA_KEY = "cardwallet.cards.v1";
-  var IMG_KEY = "cardwallet.images.v1";   // local-only full images {id: dataURL}, never synced
   var LANG_KEY = "cardwallet.lang";
 
   var I18N = {
@@ -752,38 +758,21 @@
       return list.map(normalizeCard);
     } catch (e) { return []; }
   }
-  function loadImages() {
-    try { return JSON.parse(localStorage.getItem(IMG_KEY) || "{}") || {}; } catch (e) { return {}; }
-  }
-  function saveImages() {
-    try { localStorage.setItem(IMG_KEY, JSON.stringify(localImages)); } catch (e) {}
-  }
-
   var cards = loadLocal();
-  var localImages = loadImages();
-
-  // strip inline full images out of the synced/stored record; keep them local
-  function externalize(card) {
-    if (card.img) {
-      localImages[card.id] = card.img;
-      card.img = "";
-      saveImages();
-    }
-    return card;
-  }
 
   function saveLocal() {
     try {
       localStorage.setItem(DATA_KEY, JSON.stringify({ cards: cards, v: 1 }));
     } catch (e) {
-      // storage full — most likely thumbnails; nothing else we can do gracefully
-      console.warn("Card Wallet: local save failed (storage full?)", e);
+      // local cache full (image-heavy) — the record still lives in memory and,
+      // when sync is on, in the Realtime Database, which re-hydrates on reload.
+      console.warn("Card Wallet: local cache full — relying on live sync.", e);
     }
   }
   function save() { saveLocal(); schedulePush(); }
 
   function fullImage(card) {
-    return card.imageURL || card.img || localImages[card.id] || card.thumb || "";
+    return card.imageURL || card.img || card.thumb || "";
   }
 
   /* ---------- toast ---------- */
@@ -1106,7 +1095,7 @@
       tile.type = "button"; tile.className = "card-tile";
       tile.addEventListener("click", function () { openDetail(card.id); });
 
-      var thumb = card.thumb || card.imageURL || localImages[card.id] || "";
+      var thumb = card.thumb || card.imageURL || card.img || "";
       if (thumb) {
         var im = document.createElement("img");
         im.className = "tile-img"; im.loading = "lazy"; im.alt = card.name || card.company || "";
@@ -1293,7 +1282,6 @@
     var id = currentId;
     var card = cards.filter(function (c) { return c.id === id; })[0];
     cards = cards.filter(function (c) { return c.id !== id; });
-    delete localImages[id]; saveImages();
     if (card && card.imagePath && syncApi && syncApi.deleteImage) syncApi.deleteImage(card.imagePath);
     save();
     toast(T("deleted"));
@@ -1408,8 +1396,8 @@
     // build stored images
     loadImg(item.dataURL).then(function (img) {
       pendingImg = {
-        thumb: resizeToDataURL(img, 320, 0.62),
-        medium: resizeToDataURL(img, 1000, 0.78),
+        thumb: resizeToDataURL(img, 300, 0.58),
+        medium: resizeToDataURL(img, 760, 0.7),
         ocrSrc: resizeToDataURL(img, 1600, 0.9)
       };
       // OCR
@@ -1484,24 +1472,19 @@
     }));
     if (pendingImg) {
       card.thumb = pendingImg.thumb;
-      card.img = pendingImg.medium;
+      card.img = pendingImg.medium;   // inline in the record; syncs via RTDB
     }
     cards.push(card);
+    save();
 
-    // try Storage upload; fall back to inline medium image
-    if (pendingImg && syncApi && syncApi.hasStorage && syncApi.hasStorage()) {
+    // if Firebase Storage is available, move the photo there and drop the inline copy
+    if (pendingImg && syncApi && syncApi.uploadImage) {
       var blob = dataURLtoBlob(pendingImg.medium);
       syncApi.uploadImage(card.id, blob).then(function (r) {
         card.imageURL = r.url; card.imagePath = r.path; card.img = "";
         save();
-      }).catch(function () {
-        externalize(card);   // keep medium locally, out of the synced blob
-        save();
-      });
-    } else {
-      externalize(card);
+      }).catch(function () { /* Storage not enabled — inline copy stays and syncs */ });
     }
-    save();
 
     var more = queueIndex + 1 < captureQueue.length;
     if (more) {
@@ -1630,10 +1613,11 @@
   var pushTimer = null;
 
   function syncPayloadCards() {
-    // never sync the local-only full image ("img"); thumb + storage URL are fine
+    // drop the inline photo only when it already lives in Storage (imageURL set);
+    // otherwise the inline medium copy is how the photo reaches other devices.
     return cards.map(function (c) {
       var o = Object.assign({}, c);
-      o.img = "";
+      if (o.imageURL) o.img = "";
       return o;
     });
   }
@@ -1663,14 +1647,21 @@
     out.forEach(function (c) { byId[c.id] = c; });
     (localList || []).forEach(function (c) {
       if (c && c.id && byId[c.id] && (c.updatedAt || 0) > (byId[c.id].updatedAt || 0)) {
-        Object.assign(byId[c.id], c, { img: byId[c.id].img });
+        var keepImg = byId[c.id].img || c.img;
+        Object.assign(byId[c.id], c);
+        if (!byId[c.id].imageURL && !byId[c.id].img) byId[c.id].img = keepImg;
       }
     });
     return out;
   }
   function adoptRemote(d) {
     var incoming = (d.cards || []).map(normalizeCard);
-    // keep any local-only full images we still have
+    // carry over an inline photo we still hold if the remote copy lost it
+    var mine = {};
+    cards.forEach(function (c) { mine[c.id] = c; });
+    incoming.forEach(function (c) {
+      if (!c.img && !c.imageURL && mine[c.id] && mine[c.id].img) c.img = mine[c.id].img;
+    });
     cards = incoming;
     saveLocal();
     renderList();
