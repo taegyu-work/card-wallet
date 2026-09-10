@@ -1,0 +1,1805 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Card Wallet</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Snap a photo of a business card and it reads the name, company and contact details into a searchable wallet that syncs across your devices.">
+<meta name="theme-color" content="#5647a8">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Card Wallet">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="favicon-32.png" sizes="32x32">
+<link rel="icon" href="icon-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js" defer></script>
+
+<style>
+  :root {
+    --bg: #f2efe8;
+    --surface: #ffffff;
+    --surface-2: #e8e3d7;
+    --border: #ddd6c6;
+    --border-strong: #c8c0ab;
+    --text: #221f18;
+    --text-muted: #6d685a;
+    --text-faint: #948d79;
+    --accent: #5647a8;
+    --accent-soft: #ece9f7;
+    --accent-contrast: #ffffff;
+    --good: #4f7d4a;
+    --good-soft: #e5efe0;
+    --danger: #ab4a3a;
+    --danger-soft: #f5e5e1;
+    --focus-ring: #5647a8;
+
+    --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+    --font-body: "Public Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #17161c;
+      --surface: #201f27;
+      --surface-2: #2a2833;
+      --border: #383544;
+      --border-strong: #4a4658;
+      --text: #ece9f2;
+      --text-muted: #a29eb0;
+      --text-faint: #7b7689;
+      --accent: #a99ae6;
+      --accent-soft: #282152;
+      --accent-contrast: #16112e;
+      --good: #8cbf82;
+      --good-soft: #1f2c1c;
+      --danger: #dd8c7a;
+      --danger-soft: #38241f;
+      --focus-ring: #a99ae6;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #17161c;
+    --surface: #201f27;
+    --surface-2: #2a2833;
+    --border: #383544;
+    --border-strong: #4a4658;
+    --text: #ece9f2;
+    --text-muted: #a29eb0;
+    --text-faint: #7b7689;
+    --accent: #a99ae6;
+    --accent-soft: #282152;
+    --accent-contrast: #16112e;
+    --good: #8cbf82;
+    --good-soft: #1f2c1c;
+    --danger: #dd8c7a;
+    --danger-soft: #38241f;
+    --focus-ring: #a99ae6;
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.5;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  }
+
+  .page { max-width: 680px; margin: 0 auto; padding: 52px 20px 96px; }
+
+  header.masthead { margin-bottom: 22px; }
+  .masthead-top {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 12px; margin-bottom: 10px;
+  }
+  .eyebrow {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--accent); margin: 0;
+  }
+  .lang-toggle {
+    display: inline-flex; border: 1px solid var(--border-strong);
+    border-radius: 6px; overflow: hidden; flex-shrink: 0;
+  }
+  .lang-toggle button {
+    font-family: var(--font-mono); font-size: 11px; font-weight: 500; letter-spacing: 0.03em;
+    color: var(--text-muted); background: var(--surface); border: none;
+    border-left: 1px solid var(--border-strong); padding: 5px 9px; cursor: pointer;
+  }
+  .lang-toggle button:first-child { border-left: none; }
+  .lang-toggle button[data-active="true"] { background: var(--accent); color: var(--accent-contrast); }
+
+  h1 {
+    font-family: var(--font-display); font-optical-sizing: auto; font-weight: 600;
+    font-size: 32px; letter-spacing: -0.01em; margin: 0 0 8px; text-wrap: balance;
+  }
+  .subtitle { margin: 0; color: var(--text-muted); font-size: 14.5px; max-width: 56ch; }
+
+  /* --- primary buttons --- */
+  .primary {
+    font-family: var(--font-body); font-weight: 600; font-size: 14.5px;
+    color: var(--accent-contrast); background: var(--accent);
+    border: 1px solid var(--accent); border-radius: 8px; padding: 10px 18px;
+    cursor: pointer; white-space: nowrap; transition: opacity 0.15s ease;
+  }
+  .primary:hover { opacity: 0.9; }
+  .primary.block { display: block; width: 100%; }
+
+  .btn-sm {
+    font-family: var(--font-body); font-size: 12.5px; font-weight: 600;
+    color: var(--text); background: var(--surface); border: 1px solid var(--border-strong);
+    border-radius: 6px; padding: 6px 12px; cursor: pointer;
+  }
+  .btn-sm:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-ghost {
+    font-family: var(--font-body); font-size: 13px; font-weight: 600;
+    color: var(--text-muted); background: transparent; border: none;
+    cursor: pointer; padding: 6px 4px;
+  }
+  .btn-ghost:hover { color: var(--accent); }
+  .danger-btn {
+    font-family: var(--font-body); font-size: 12.5px; font-weight: 600;
+    color: var(--danger); background: var(--danger-soft);
+    border: 1px solid transparent; border-radius: 6px; padding: 6px 12px; cursor: pointer;
+  }
+  .danger-btn:hover { border-color: var(--danger); }
+
+  .field-label {
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.07em;
+    text-transform: uppercase; color: var(--text-faint);
+  }
+
+  /* --- toolbar / search --- */
+  .toolbar { display: flex; gap: 8px; margin: 22px 0 12px; }
+  .search-wrap { position: relative; flex: 1; min-width: 0; }
+  .search {
+    width: 100%; font-family: var(--font-body); font-size: 15px; color: var(--text);
+    background: var(--surface); border: 1px solid var(--border-strong);
+    border-radius: 8px; padding: 10px 34px 10px 13px; outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .search::placeholder { color: var(--text-faint); }
+  .search:focus-visible { border-color: var(--focus-ring); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .search-clear {
+    position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+    width: 24px; height: 24px; display: grid; place-content: center;
+    background: transparent; border: none; color: var(--text-faint);
+    font-size: 15px; cursor: pointer; border-radius: 5px;
+  }
+  .search-clear:hover { color: var(--danger); }
+
+  .sort-select {
+    font-family: var(--font-body); font-size: 13px; font-weight: 600; color: var(--text-muted);
+    background: var(--surface); border: 1px solid var(--border-strong);
+    border-radius: 8px; padding: 8px 10px; cursor: pointer; outline: none;
+  }
+
+  .filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+  .filter-pill {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.02em;
+    color: var(--text-muted); background: var(--surface);
+    border: 1px solid var(--border-strong); border-radius: 999px;
+    padding: 4px 11px; cursor: pointer;
+  }
+  .filter-pill[data-active="true"] { background: var(--accent); color: var(--accent-contrast); border-color: var(--accent); }
+
+  /* --- card grid --- */
+  .card-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 14px; margin: 0; padding: 0; list-style: none;
+  }
+  .card-tile {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden; cursor: pointer; text-align: left;
+    font: inherit; color: inherit; padding: 0; display: flex; flex-direction: column;
+    transition: border-color 0.12s ease, transform 0.12s ease;
+  }
+  .card-tile:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .card-tile:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  .tile-img {
+    width: 100%; aspect-ratio: 1.75 / 1; object-fit: cover;
+    background: var(--surface-2); display: block;
+  }
+  .tile-img.placeholder {
+    display: grid; place-content: center; color: var(--text-faint);
+    font-family: var(--font-display); font-size: 30px; font-weight: 600;
+  }
+  .tile-body { padding: 10px 12px 12px; }
+  .tile-name { font-weight: 700; font-size: 15px; color: var(--text); }
+  .tile-sub { font-size: 12.5px; color: var(--text-muted); margin-top: 2px; }
+  .tile-tags { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
+  .tile-tag {
+    font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.03em;
+    color: var(--accent); background: var(--accent-soft);
+    border-radius: 4px; padding: 1px 5px;
+  }
+
+  .empty-state { padding: 54px 4px; text-align: center; color: var(--text-faint); font-size: 14px; }
+  .empty-state .glyph { font-size: 30px; margin-bottom: 10px; display: block; opacity: 0.5; }
+
+  .count {
+    font-family: var(--font-mono); font-size: 12px; color: var(--text-muted);
+    font-variant-numeric: tabular-nums; margin-top: 18px; display: block;
+  }
+  .count strong { color: var(--text); font-weight: 600; }
+
+  /* --- capture view --- */
+  .back-link {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--text-faint); background: none;
+    border: none; cursor: pointer; padding: 4px 0; margin-bottom: 14px;
+  }
+  .back-link:hover { color: var(--accent); }
+
+  .dropzone {
+    border: 2px dashed var(--border-strong); border-radius: 14px;
+    padding: 38px 20px; text-align: center; cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .dropzone:hover, .dropzone.drag { border-color: var(--accent); background: var(--accent-soft); }
+  .dropzone .dz-glyph { font-size: 34px; display: block; margin-bottom: 10px; opacity: 0.6; }
+  .dropzone .dz-main { font-weight: 600; font-size: 15px; }
+  .dropzone .dz-hint { font-size: 12.5px; color: var(--text-muted); margin-top: 4px; }
+
+  .queue-tag {
+    font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);
+    margin: 14px 0 8px; display: block;
+  }
+
+  .capture-preview { margin: 14px 0; }
+  .capture-preview img {
+    width: 100%; border-radius: 12px; border: 1px solid var(--border);
+    display: block; max-height: 300px; object-fit: contain; background: var(--surface-2);
+  }
+
+  .ocr-status {
+    display: flex; align-items: center; gap: 10px; margin: 12px 0;
+    font-family: var(--font-mono); font-size: 12px; color: var(--text-muted);
+  }
+  .ocr-bar { flex: 1; height: 6px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+  .ocr-bar-fill { height: 100%; width: 0; background: var(--accent); border-radius: 999px; transition: width 0.25s ease; }
+
+  .field-form { margin-top: 8px; }
+  .field {
+    display: grid; grid-template-columns: 92px 1fr; align-items: center;
+    gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--border);
+  }
+  .field label {
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.05em;
+    text-transform: uppercase; color: var(--text-faint);
+  }
+  .field input, .field textarea {
+    width: 100%; font-family: var(--font-body); font-size: 14.5px; color: var(--text);
+    background: var(--surface); border: 1px solid var(--border-strong);
+    border-radius: 6px; padding: 8px 10px; outline: none;
+  }
+  .field textarea { resize: vertical; min-height: 40px; }
+  .field input:focus-visible, .field textarea:focus-visible {
+    border-color: var(--focus-ring); box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
+  .raw-toggle {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--text-faint); background: none;
+    border: none; cursor: pointer; padding: 10px 0 4px;
+  }
+  .raw-toggle:hover { color: var(--accent); }
+  pre.raw-text {
+    white-space: pre-wrap; word-break: break-word; font-family: var(--font-mono);
+    font-size: 11.5px; color: var(--text-muted); background: var(--surface-2);
+    border-radius: 8px; padding: 12px; margin: 6px 0 0; max-height: 200px; overflow: auto;
+  }
+
+  .form-actions { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
+
+  /* --- detail view --- */
+  .detail-img-wrap { margin: 6px 0 18px; }
+  .detail-img-wrap img {
+    width: 100%; max-height: 58vh; object-fit: contain; object-position: top;
+    border-radius: 12px; border: 1px solid var(--border);
+    display: block; cursor: zoom-in; background: var(--surface-2);
+  }
+  .detail-name { font-family: var(--font-display); font-weight: 600; font-size: 26px; margin: 0 0 2px; }
+  .detail-role { color: var(--text-muted); font-size: 14.5px; margin: 0 0 16px; }
+
+  .field-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 11px 2px; border-bottom: 1px solid var(--border);
+  }
+  .fr-main { flex: 1; min-width: 0; }
+  .fr-label {
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--text-faint); display: block; margin-bottom: 1px;
+  }
+  .fr-value { font-size: 14.5px; color: var(--text); word-break: break-word; }
+  .fr-value a { color: var(--accent); text-decoration: none; }
+  .fr-value a:hover { text-decoration: underline; }
+  .fr-actions { display: flex; gap: 4px; flex-shrink: 0; }
+  .icon-btn {
+    width: 30px; height: 30px; display: grid; place-content: center;
+    background: transparent; border: 1px solid var(--border); border-radius: 7px;
+    color: var(--text-muted); cursor: pointer; font-size: 13px;
+  }
+  .icon-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .detail-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0 4px; }
+  .detail-tag {
+    font-family: var(--font-mono); font-size: 10.5px; color: var(--accent);
+    background: var(--accent-soft); border-radius: 5px; padding: 2px 8px;
+  }
+  .detail-actions { display: flex; gap: 8px; margin-top: 20px; flex-wrap: wrap; }
+  .detail-meta {
+    font-family: var(--font-mono); font-size: 11px; color: var(--text-faint);
+    margin-top: 16px;
+  }
+
+  /* --- lightbox --- */
+  .lightbox {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.86);
+    display: grid; place-content: center; padding: 20px; z-index: 60; cursor: zoom-out;
+  }
+  .lightbox img { max-width: 96vw; max-height: 92vh; border-radius: 8px; }
+
+  /* --- transfer / backup --- */
+  details.transfer { margin-top: 26px; border-top: 1px solid var(--border); padding-top: 14px; }
+  details.transfer summary {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--text-faint); cursor: pointer; list-style: none;
+  }
+  details.transfer summary::-webkit-details-marker { display: none; }
+  details.transfer summary::before { content: "+ "; }
+  details.transfer[open] summary::before { content: "\2212 "; }
+  .transfer-body { margin-top: 12px; }
+  .transfer-body p { margin: 0 0 8px; font-size: 12.5px; color: var(--text-muted); }
+  textarea.io {
+    width: 100%; min-height: 90px; font-family: var(--font-mono); font-size: 11.5px;
+    color: var(--text); background: var(--surface); border: 1px solid var(--border-strong);
+    border-radius: 6px; padding: 10px; outline: none; resize: vertical;
+  }
+  textarea.io:focus-visible { border-color: var(--focus-ring); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .transfer-actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%) translateY(8px);
+    background: var(--text); color: var(--bg); font-size: 13px; font-weight: 600;
+    padding: 9px 16px; border-radius: 8px; opacity: 0; pointer-events: none;
+    transition: opacity 0.18s ease, transform 0.18s ease; z-index: 70;
+    max-width: 84vw; text-align: center;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  button:focus-visible, a:focus-visible, select:focus-visible {
+    outline: 2px solid var(--focus-ring); outline-offset: 2px;
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <header class="masthead">
+    <div class="masthead-top">
+      <p class="eyebrow" id="eyebrow"></p>
+      <div class="lang-toggle" id="lang-toggle" role="group">
+        <button type="button" data-lang="en">EN</button>
+        <button type="button" data-lang="ko">한국어</button>
+      </div>
+    </div>
+    <h1 id="app-title"></h1>
+    <p class="subtitle" id="subtitle"></p>
+  </header>
+
+  <!-- ============ LIST VIEW ============ -->
+  <section id="view-list">
+    <button type="button" class="primary block" id="add-card-btn"></button>
+
+    <div class="toolbar">
+      <div class="search-wrap">
+        <input type="search" class="search" id="search" autocomplete="off">
+        <button type="button" class="search-clear" id="search-clear" hidden aria-label="clear">✕</button>
+      </div>
+      <select class="sort-select" id="sort-select">
+        <option value="recent"></option>
+        <option value="name"></option>
+        <option value="company"></option>
+      </select>
+    </div>
+
+    <div class="filters" id="filters" hidden></div>
+
+    <ul class="card-grid" id="card-grid"></ul>
+    <div class="empty-state" id="empty-state" hidden>
+      <span class="glyph">🪪</span>
+      <span id="empty-text"></span>
+    </div>
+    <span class="count" id="count"></span>
+
+    <details class="transfer">
+      <summary id="transfer-summary"></summary>
+      <div class="transfer-body">
+        <p id="transfer-desc"></p>
+        <textarea class="io" id="io-box" spellcheck="false"></textarea>
+        <div class="transfer-actions">
+          <button type="button" class="btn-sm" id="export-btn"></button>
+          <button type="button" class="btn-sm" id="import-btn"></button>
+          <button type="button" class="btn-sm" id="vcf-all-btn"></button>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <!-- ============ CAPTURE / EDIT VIEW ============ -->
+  <section id="view-capture" hidden>
+    <button type="button" class="back-link" id="cap-back"></button>
+    <h2 id="cap-title" style="font-family:var(--font-display);font-weight:600;font-size:22px;margin:0 0 14px;"></h2>
+
+    <div id="dropzone" class="dropzone">
+      <span class="dz-glyph">📇</span>
+      <span class="dz-main" id="dz-main"></span>
+      <span class="dz-hint" id="dz-hint"></span>
+    </div>
+    <input type="file" id="file-input" accept="image/*" capture="environment" multiple hidden>
+    <button type="button" class="btn-ghost" id="manual-btn" style="margin-top:10px;"></button>
+
+    <span class="queue-tag" id="queue-tag" hidden></span>
+
+    <div class="capture-preview" id="capture-preview" hidden><img id="preview-img" alt=""></div>
+
+    <div class="ocr-status" id="ocr-status" hidden>
+      <span id="ocr-label"></span>
+      <span class="ocr-bar"><span class="ocr-bar-fill" id="ocr-bar-fill"></span></span>
+    </div>
+
+    <form class="field-form" id="field-form" autocomplete="off" hidden>
+      <div class="field"><label id="l-name"></label><input type="text" id="f-name" maxlength="80"></div>
+      <div class="field"><label id="l-title"></label><input type="text" id="f-title" maxlength="80"></div>
+      <div class="field"><label id="l-company"></label><input type="text" id="f-company" maxlength="120"></div>
+      <div class="field"><label id="l-dept"></label><input type="text" id="f-dept" maxlength="120"></div>
+      <div class="field"><label id="l-mobile"></label><input type="text" id="f-mobile" inputmode="tel" maxlength="40"></div>
+      <div class="field"><label id="l-phone"></label><input type="text" id="f-phone" inputmode="tel" maxlength="40"></div>
+      <div class="field"><label id="l-fax"></label><input type="text" id="f-fax" inputmode="tel" maxlength="40"></div>
+      <div class="field"><label id="l-email"></label><input type="text" id="f-email" inputmode="email" maxlength="120"></div>
+      <div class="field"><label id="l-website"></label><input type="text" id="f-website" maxlength="160"></div>
+      <div class="field"><label id="l-address"></label><textarea id="f-address" maxlength="240" rows="2"></textarea></div>
+      <div class="field"><label id="l-tags"></label><input type="text" id="f-tags" maxlength="160"></div>
+      <div class="field"><label id="l-note"></label><textarea id="f-note" maxlength="400" rows="2"></textarea></div>
+
+      <button type="button" class="raw-toggle" id="raw-toggle" hidden></button>
+      <pre class="raw-text" id="raw-text" hidden></pre>
+
+      <div class="form-actions">
+        <button type="submit" class="primary" id="save-card-btn"></button>
+        <button type="button" class="btn-sm" id="skip-card-btn" hidden></button>
+        <button type="button" class="btn-sm" id="cancel-card-btn"></button>
+      </div>
+    </form>
+  </section>
+
+  <!-- ============ DETAIL VIEW ============ -->
+  <section id="view-detail" hidden>
+    <button type="button" class="back-link" id="det-back"></button>
+    <div class="detail-img-wrap" id="detail-img-wrap" hidden><img id="detail-img" alt=""></div>
+    <h2 class="detail-name" id="detail-name"></h2>
+    <p class="detail-role" id="detail-role"></p>
+    <div id="detail-fields"></div>
+    <div class="detail-tags" id="detail-tags" hidden></div>
+    <div class="detail-actions">
+      <button type="button" class="btn-sm" id="det-edit"></button>
+      <button type="button" class="btn-sm" id="det-vcf"></button>
+      <button type="button" class="danger-btn" id="det-delete"></button>
+    </div>
+    <p class="detail-meta" id="detail-meta"></p>
+  </section>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!--
+  ┌───────────────────────────────────────────────────────────────────┐
+  │  LIVE SYNC SETUP (optional)                                        │
+  │  Paste your Firebase web config between the braces below and       │
+  │  every card syncs live across your devices and anyone with the     │
+  │  link. Leave it blank and the wallet still works, saved in this    │
+  │  browser only. Full steps are in SETUP.md.                         │
+  └───────────────────────────────────────────────────────────────────┘
+-->
+<script type="module">
+  // ▼▼▼ Firebase web config ▼▼▼
+  const CONFIG = {
+  };
+  // ▲▲▲ Not secrets — Firebase web configs ship in the browser.
+  //     Access is controlled by the database + storage rules. ▲▲▲
+
+  const DB_PATH = "cardWallet/cards";
+  const SDK = "https://www.gstatic.com/firebasejs/10.12.5";
+
+  function decide(value) {
+    window.CW_SYNC = value;
+    window.CW_SYNC_DECIDED = true;
+    window.dispatchEvent(new Event("cw-sync-decided"));
+  }
+
+  if (!CONFIG || !CONFIG.apiKey || !CONFIG.databaseURL) {
+    decide(null);
+  } else {
+    try {
+      const [{ initializeApp }, dbmod, authmod, stgmod] = await Promise.all([
+        import(`${SDK}/firebase-app.js`),
+        import(`${SDK}/firebase-database.js`),
+        import(`${SDK}/firebase-auth.js`),
+        import(`${SDK}/firebase-storage.js`)
+      ]);
+      const app = initializeApp(CONFIG);
+      const db = dbmod.getDatabase(app);
+      const auth = authmod.getAuth(app);
+      const docRef = dbmod.ref(db, DB_PATH);
+      let storage = null;
+      try { storage = stgmod.getStorage(app); } catch (e) { storage = null; }
+      const NODE = DB_PATH.split("/")[0];
+
+      let readyResolve;
+      const ready = new Promise((r) => { readyResolve = r; });
+
+      decide({
+        ready,
+        subscribe(cb) {
+          dbmod.onValue(docRef, (snap) => { cb(snap.exists() ? snap.val() : null); }, () => {});
+        },
+        push(data) { return dbmod.set(docRef, data); },
+        hasStorage() { return !!storage; },
+        async uploadImage(id, blob) {
+          if (!storage) throw new Error("no storage");
+          const r = stgmod.ref(storage, `${NODE}/cards/${id}.jpg`);
+          await stgmod.uploadBytes(r, blob, { contentType: "image/jpeg" });
+          const url = await stgmod.getDownloadURL(r);
+          return { path: r.fullPath, url };
+        },
+        async deleteImage(path) {
+          if (!storage || !path) return;
+          try { await stgmod.deleteObject(stgmod.ref(storage, path)); } catch (e) {}
+        }
+      });
+
+      try {
+        await authmod.signInAnonymously(auth);
+        readyResolve(true);
+      } catch (e) {
+        console.warn("Card Wallet: anonymous sign-in failed — sync off.", e);
+        readyResolve(false);
+        window.CW_SYNC = null;
+      }
+    } catch (e) {
+      console.warn("Card Wallet: Firebase failed to load — sync off.", e);
+      decide(null);
+    }
+  }
+</script>
+
+<script>
+(function () {
+  "use strict";
+
+  var DATA_KEY = "cardwallet.cards.v1";
+  var IMG_KEY = "cardwallet.images.v1";   // local-only full images {id: dataURL}, never synced
+  var LANG_KEY = "cardwallet.lang";
+
+  var I18N = {
+    en: {
+      htmlLang: "en", locale: "en-US",
+      eyebrow: "Personal · saved in this browser",
+      eyebrowSync: "Shared · live-synced across your devices",
+      title: "Card Wallet",
+      subtitle: "Snap a photo of a business card and it reads the name, company and contact details into a searchable wallet.",
+      subtitleSync: "Snap a business card and it reads the details into a searchable wallet that syncs live across your devices.",
+      addCard: "＋ Add a card",
+      searchPh: "Search name, company, phone…",
+      sortRecent: "Newest first", sortName: "By name", sortCompany: "By company",
+      allTag: "All",
+      emptyNone: "No cards yet. Add one to get started.",
+      emptySearch: "No cards match your search.",
+      count: "{n} cards", countOne: "1 card",
+      back: "‹ Back",
+      capTitleNew: "Add a card", capTitleEdit: "Edit card",
+      dzMain: "Take a photo or choose an image",
+      dzHint: "JPG, PNG or HEIC · you can pick several at once",
+      manual: "Enter a card by hand instead",
+      queue: "Card {i} of {n}",
+      ocrReady: "Reading the card…",
+      ocrDownloading: "Downloading the text engine (one time)…",
+      ocrDone: "Read complete — check the fields below",
+      ocrFailed: "Couldn't read the card automatically — type the details in",
+      ocrNoEngine: "Text engine unavailable offline — type the details in",
+      lName: "Name", lTitle: "Title", lCompany: "Company", lDept: "Department",
+      lMobile: "Mobile", lPhone: "Office", lFax: "Fax", lEmail: "Email",
+      lWebsite: "Website", lAddress: "Address", lTags: "Tags", lNote: "Note",
+      tagsHint: "comma-separated",
+      rawShow: "Show raw scanned text", rawHide: "Hide raw scanned text",
+      save: "Save card", saveNext: "Save & next", skip: "Skip", cancel: "Cancel",
+      needName: "Give the card a name or company first",
+      saved: "Card saved", savedAll: "All cards saved",
+      uploading: "Saving image…",
+      detEdit: "Edit", detVcf: "Export .vcf", detDelete: "Delete",
+      deleteArm: "Tap again to delete", deleted: "Card deleted",
+      addedOn: "Added {d}", updatedOn: " · updated {d}",
+      call: "Call", mail: "Email", copy: "Copy", open: "Open", map: "Map",
+      copied: "Copied",
+      transferSummary: "Back up / move / export",
+      transferDesc: "Copy the JSON below to back up or move to another device (thumbnails included, full-size photos are not). Importing merges by card.",
+      fill: "Fill with current data", importBtn: "Import",
+      importArm: "Confirm merge — click again",
+      importEmpty: "Paste data to import first",
+      importBad: "That isn't the right format",
+      fillOk: "Filled with your current data",
+      importDone: "Imported — {n} cards total",
+      vcfAll: "Export all as .vcf",
+      vcfNone: "No cards to export",
+      langGroup: "Language"
+    },
+    ko: {
+      htmlLang: "ko", locale: "ko-KR",
+      eyebrow: "개인용 · 이 브라우저에 저장됨",
+      eyebrowSync: "공유 · 여러 기기에서 실시간 동기화",
+      title: "명함첩",
+      subtitle: "명함을 사진으로 찍으면 이름·회사·연락처를 읽어 검색 가능한 명함첩에 담아 둡니다.",
+      subtitleSync: "명함을 찍으면 내용을 읽어 검색 가능한 명함첩에 담고, 여러 기기에서 실시간으로 동기화합니다.",
+      addCard: "＋ 명함 추가",
+      searchPh: "이름, 회사, 전화번호 검색…",
+      sortRecent: "최근 추가순", sortName: "이름순", sortCompany: "회사순",
+      allTag: "전체",
+      emptyNone: "아직 명함이 없어요. 하나 추가해 보세요.",
+      emptySearch: "검색 결과가 없어요.",
+      count: "명함 {n}장", countOne: "명함 1장",
+      back: "‹ 뒤로",
+      capTitleNew: "명함 추가", capTitleEdit: "명함 수정",
+      dzMain: "사진을 찍거나 이미지를 선택하세요",
+      dzHint: "JPG, PNG, HEIC · 여러 장 한 번에 선택 가능",
+      manual: "직접 입력으로 추가하기",
+      queue: "{n}장 중 {i}장째",
+      ocrReady: "명함을 읽는 중…",
+      ocrDownloading: "문자 인식 엔진 내려받는 중(최초 1회)…",
+      ocrDone: "읽기 완료 — 아래 항목을 확인하세요",
+      ocrFailed: "자동으로 읽지 못했어요 — 직접 입력해 주세요",
+      ocrNoEngine: "오프라인이라 인식 엔진을 쓸 수 없어요 — 직접 입력해 주세요",
+      lName: "이름", lTitle: "직함", lCompany: "회사", lDept: "부서",
+      lMobile: "휴대전화", lPhone: "사무실", lFax: "팩스", lEmail: "이메일",
+      lWebsite: "웹사이트", lAddress: "주소", lTags: "태그", lNote: "메모",
+      tagsHint: "쉼표로 구분",
+      rawShow: "인식된 원문 보기", rawHide: "인식된 원문 숨기기",
+      save: "명함 저장", saveNext: "저장 후 다음", skip: "건너뛰기", cancel: "취소",
+      needName: "이름이나 회사를 먼저 입력하세요",
+      saved: "명함을 저장했어요", savedAll: "모든 명함을 저장했어요",
+      uploading: "이미지 저장 중…",
+      detEdit: "수정", detVcf: ".vcf 내보내기", detDelete: "삭제",
+      deleteArm: "한 번 더 누르면 삭제", deleted: "명함을 삭제했어요",
+      addedOn: "{d} 추가", updatedOn: " · {d} 수정",
+      call: "전화", mail: "메일", copy: "복사", open: "열기", map: "지도",
+      copied: "복사했어요",
+      transferSummary: "백업 / 옮기기 / 내보내기",
+      transferDesc: "다른 기기로 옮기거나 백업하려면 아래 JSON을 복사하세요(썸네일 포함, 원본 사진은 제외). 가져오기는 명함 단위로 병합합니다.",
+      fill: "현재 데이터 채우기", importBtn: "가져오기",
+      importArm: "병합 확인 — 다시 누르기",
+      importEmpty: "가져올 데이터를 붙여넣어 주세요",
+      importBad: "형식이 올바르지 않아요",
+      fillOk: "현재 데이터를 채웠어요",
+      importDone: "가져왔어요 — 총 {n}장",
+      vcfAll: "전체 .vcf로 내보내기",
+      vcfNone: "내보낼 명함이 없어요",
+      langGroup: "언어"
+    }
+  };
+
+  function loadLang() {
+    try { return localStorage.getItem(LANG_KEY) === "ko" ? "ko" : "en"; } catch (e) { return "en"; }
+  }
+  var lang = loadLang();
+  function T(k) { return (I18N[lang] && I18N[lang][k] != null) ? I18N[lang][k] : I18N.en[k]; }
+  function fmt(s, o) { return String(s).replace(/\{(\w+)\}/g, function (m, k) { return o[k] != null ? o[k] : m; }); }
+
+  function $(id) { return document.getElementById(id); }
+  function makeId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+  /* ---------- data ---------- */
+  var FIELDS = ["name", "title", "company", "dept", "mobile", "phone", "fax", "email", "website", "address", "note"];
+
+  function normalizeCard(c) {
+    c = c || {};
+    var out = {
+      id: c.id || makeId(),
+      name: String(c.name || "").slice(0, 80),
+      title: String(c.title || "").slice(0, 80),
+      company: String(c.company || "").slice(0, 120),
+      dept: String(c.dept || "").slice(0, 120),
+      mobile: String(c.mobile || "").slice(0, 40),
+      phone: String(c.phone || "").slice(0, 40),
+      fax: String(c.fax || "").slice(0, 40),
+      email: String(c.email || "").slice(0, 120),
+      website: String(c.website || "").slice(0, 160),
+      address: String(c.address || "").slice(0, 240),
+      note: String(c.note || "").slice(0, 400),
+      tags: Array.isArray(c.tags) ? c.tags.map(function (t) { return String(t).trim(); }).filter(Boolean).slice(0, 12) : [],
+      thumb: typeof c.thumb === "string" && c.thumb.indexOf("data:image") === 0 ? c.thumb : "",
+      img: typeof c.img === "string" && c.img.indexOf("data:image") === 0 ? c.img : "",
+      imageURL: typeof c.imageURL === "string" ? c.imageURL : "",
+      imagePath: typeof c.imagePath === "string" ? c.imagePath : "",
+      rawText: String(c.rawText || "").slice(0, 4000),
+      createdAt: c.createdAt || Date.now(),
+      updatedAt: c.updatedAt || c.createdAt || Date.now()
+    };
+    return out;
+  }
+
+  function loadLocal() {
+    try {
+      var raw = localStorage.getItem(DATA_KEY);
+      if (!raw) return [];
+      var p = JSON.parse(raw);
+      var list = Array.isArray(p) ? p : (Array.isArray(p.cards) ? p.cards : []);
+      return list.map(normalizeCard);
+    } catch (e) { return []; }
+  }
+  function loadImages() {
+    try { return JSON.parse(localStorage.getItem(IMG_KEY) || "{}") || {}; } catch (e) { return {}; }
+  }
+  function saveImages() {
+    try { localStorage.setItem(IMG_KEY, JSON.stringify(localImages)); } catch (e) {}
+  }
+
+  var cards = loadLocal();
+  var localImages = loadImages();
+
+  // strip inline full images out of the synced/stored record; keep them local
+  function externalize(card) {
+    if (card.img) {
+      localImages[card.id] = card.img;
+      card.img = "";
+      saveImages();
+    }
+    return card;
+  }
+
+  function saveLocal() {
+    try {
+      localStorage.setItem(DATA_KEY, JSON.stringify({ cards: cards, v: 1 }));
+    } catch (e) {
+      // storage full — most likely thumbnails; nothing else we can do gracefully
+      console.warn("Card Wallet: local save failed (storage full?)", e);
+    }
+  }
+  function save() { saveLocal(); schedulePush(); }
+
+  function fullImage(card) {
+    return card.imageURL || card.img || localImages[card.id] || card.thumb || "";
+  }
+
+  /* ---------- toast ---------- */
+  var toastTimer;
+  function toast(msg) {
+    var el = $("toast");
+    el.textContent = msg;
+    el.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.classList.remove("show"); }, 2200);
+  }
+
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { toast(T("copied")); }, function () { fallbackCopy(text); });
+    } else { fallbackCopy(text); }
+  }
+  function fallbackCopy(text) {
+    try {
+      var ta = document.createElement("textarea");
+      ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      toast(T("copied"));
+    } catch (e) {}
+  }
+
+  /* ---------- image helpers ---------- */
+  function fileToDataURL(file) {
+    return new Promise(function (resolve, reject) {
+      var fr = new FileReader();
+      fr.onload = function () { resolve(fr.result); };
+      fr.onerror = reject;
+      fr.readAsDataURL(file);
+    });
+  }
+  function loadImg(src) {
+    return new Promise(function (resolve, reject) {
+      var im = new Image();
+      im.onload = function () { resolve(im); };
+      im.onerror = reject;
+      im.src = src;
+    });
+  }
+  function resizeToDataURL(img, maxW, quality) {
+    var scale = Math.min(1, maxW / img.naturalWidth);
+    var w = Math.round(img.naturalWidth * scale);
+    var h = Math.round(img.naturalHeight * scale);
+    var cv = document.createElement("canvas");
+    cv.width = w; cv.height = h;
+    var ctx = cv.getContext("2d");
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(img, 0, 0, w, h);
+    return cv.toDataURL("image/jpeg", quality);
+  }
+  function dataURLtoBlob(dataURL) {
+    var parts = dataURL.split(",");
+    var mime = (parts[0].match(/:(.*?);/) || [])[1] || "image/jpeg";
+    var bin = atob(parts[1]);
+    var arr = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return new Blob([arr], { type: mime });
+  }
+
+  /* ---------- OCR ---------- */
+  var ocrLangLoaded = false;
+  function runOCR(dataURL, onProgress) {
+    if (typeof window.Tesseract === "undefined") return Promise.reject(new Error("no-engine"));
+    return window.Tesseract.recognize(dataURL, "kor+eng", {
+      logger: function (m) {
+        if (m.status === "recognizing text" && onProgress) onProgress(m.progress);
+        if ((m.status || "").indexOf("loading language") === 0 || (m.status || "").indexOf("initializing") === 0) {
+          if (onProgress) onProgress(-1);
+        }
+      }
+    }).then(function (res) {
+      ocrLangLoaded = true;
+      return (res && res.data && res.data.text) ? res.data.text : "";
+    });
+  }
+
+  var TITLE_RE = /(대표이사|대표|회장|부회장|사장|부사장|전무|상무|이사대우|이사|본부장|사업부장|실장|센터장|소장|팀장|파트장|그룹장|부장|차장|과장|대리|주임|사원|선임연구원|책임연구원|수석연구원|선임|책임|수석|연구원|기사|매니저|팀원|Chief|C\.?E\.?O|C\.?T\.?O|C\.?F\.?O|C\.?O\.?O|President|Vice President|VP|Director|Manager|Head of|Lead|Principal|Senior|Junior|Engineer|Developer|Researcher|Scientist|Consultant|Analyst|Associate|Specialist|Coordinator|Officer|Founder|Partner|Chairman|Advisor|Representative|Sales|Marketing)/i;
+  var COMPANY_RE = /(주식회사|\(주\)|㈜|유한회사|\(유\)|재단법인|사단법인|Inc\.?|Incorporated|Ltd\.?|Limited|L\.?L\.?C|Co\.,?\s*Ltd|Corp\.?|Corporation|Company|Group|Holdings|Partners|Ventures|Capital|Laborator|Institute|Foundation|Technolog|Solutions|Systems|Networks|Pharmaceutical|Biotech|Bio\b|Medical|Hospital|Clinic|University|College|병원|의원|대학교|연구소|연구원|제약|바이오|테크|그룹|파트너스)/i;
+  var ADDR_RE = /(\d+\s*(층|F\b|Floor)|[가-힣]+(시|도)\s|[가-힣]+구\s|[가-힣]+(로|길)\s?\d|[가-힣]+동\s|서울|경기|인천|부산|대구|대전|광주|울산|세종|강원|충북|충남|전북|전남|경북|경남|제주|Korea|Seoul|Gyeonggi|[Ss]treet|\bSt\.|\bAve\.|\bAvenue|\bRoad\b|\bRd\.|\bBldg|\bSuite|\bFloor\b|\bZIP\b)/;
+
+  function cleanLine(s) { return s.replace(/[|·•∙‣▪●※★☆■□▶►]+/g, " ").replace(/\s{2,}/g, " ").trim(); }
+
+  var TITLE_TOKENS = "대표이사|대표|회장|부회장|사장|부사장|전무이사|전무|상무이사|상무|이사대우|이사|감사|고문|본부장|사업부장|부문장|실장|센터장|소장|국장|처장|부장|차장|과장|대리|주임|사원|선임|책임|수석|팀장|파트장|그룹장|매니저|연구원|주치의|원장|교수|약사|간사|위원|위원장";
+  var NAME_TITLE_RE = new RegExp("^([가-힣]{2,4})\\s*[\\/,·|]?\\s*(" + TITLE_TOKENS + ")\\b");
+  var TITLE_NAME_RE = new RegExp("^(" + TITLE_TOKENS + ")\\s+([가-힣]{2,4})$");
+  var TITLE_ONLY_RE = new RegExp("^(" + TITLE_TOKENS + ")$");
+  var DEPT_RE = /([가-힣A-Za-z][가-힣A-Za-z\s]*?(본부|사업부|부문|연구소|연구팀|개발팀|영업팀|마케팅팀|기획팀|사업팀|지원팀|관리팀|팀|실|파트|그룹|센터|Division|Department|Dept\.?|Team|Group|Unit|Office))\b/;
+
+  function parseCard(text) {
+    var out = { name: "", title: "", company: "", dept: "", mobile: "", phone: "", fax: "", email: "", website: "", address: "" };
+    if (!text) return out;
+    var rawLines = text.split(/\r?\n/).map(cleanLine).filter(function (l) { return l.length > 0; });
+    var used = {};
+
+    // ---- email ----
+    var m = text.replace(/\s*@\s*/g, "@").match(/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/);
+    if (m) out.email = m[0].replace(/[.,;]+$/, "");
+
+    // ---- website (same domain as email is fine; skip the email itself / bare email domain) ----
+    var emailDomain = out.email ? out.email.split("@")[1].toLowerCase() : "";
+    var urlRe = /((https?:\/\/)?(www\.)?[A-Za-z0-9][A-Za-z0-9\-]*(\.[A-Za-z0-9\-]+)*\.(com|net|org|io|co|kr|ai|dev|biz|info|me)(\.[a-z]{2})?)(\/[^\s]*)?/gi;
+    var um;
+    while ((um = urlRe.exec(text))) {
+      var cand = um[1].replace(/[.,;)]+$/, "");
+      var before = text.charAt(um.index - 1);
+      if (before === "@" || cand.indexOf("@") !== -1) continue;
+      if (emailDomain && cand.toLowerCase() === emailDomain && !/^(https?:\/\/|www\.)/i.test(um[0])) continue;
+      out.website = cand;
+      break;
+    }
+
+    // ---- phones (handle multiple numbers + fax keyword on one line) ----
+    function tidyPhone(p) {
+      return p.replace(/^[\s:.\-]+/, "").replace(/[\s.\-]+$/, "")
+        .replace(/^(tel|t|m|h\.?p|mobile|cell|phone|office|direct|fax|hp|휴대폰|휴대전화|휴대|전화|팩스|직통)[\s:.\-]*/i, "").trim();
+    }
+    rawLines.forEach(function (l, li) {
+      var low = l.toLowerCase();
+      var faxPos = low.search(/fax|팩스|f\s*[:.]/);
+      var mobPos = low.search(/mobile|cell|\bm\s*[:.]|h\.?p|휴대/);
+      var re = /(\+?\d[\d\s().\-]{6,}\d)/g, mm, found = false;
+      while ((mm = re.exec(l))) {
+        var val = tidyPhone(mm[1]);
+        var digits = val.replace(/\D/g, "");
+        if (digits.length < 8 || digits.length > 13) continue;
+        found = true;
+        var isMobileNum = /^0?1[016789]/.test(digits.replace(/^82/, "0"));
+        var beforeFax = faxPos === -1 || mm.index < faxPos;
+        if (!beforeFax) { if (!out.fax) out.fax = val; }
+        else if (isMobileNum || (mobPos !== -1 && mm.index >= mobPos && faxPos === -1)) { if (!out.mobile) out.mobile = val; }
+        else if (!out.phone) { out.phone = val; }
+        else if (!out.mobile && !isMobileNum) { /* leave */ }
+      }
+      if (found) used[li] = true;
+    });
+
+    // ---- mark used lines for email / website ----
+    if (out.email) rawLines.forEach(function (l, i) { if (l.replace(/\s/g, "").toLowerCase().indexOf(out.email.toLowerCase()) !== -1) used[i] = true; });
+    if (out.website) rawLines.forEach(function (l, i) {
+      if (l.toLowerCase().indexOf(out.website.replace(/^https?:\/\//i, "").toLowerCase()) !== -1 && !/@/.test(l)) used[i] = true;
+    });
+
+    // ---- company ----
+    for (var i = 0; i < rawLines.length; i++) {
+      if (used[i]) continue;
+      if (COMPANY_RE.test(rawLines[i]) && rawLines[i].length <= 44) { out.company = rawLines[i]; used[i] = true; break; }
+    }
+
+    // ---- address (matching line + optional continuation) ----
+    for (var a = 0; a < rawLines.length; a++) {
+      if (used[a]) continue;
+      if (ADDR_RE.test(rawLines[a]) && rawLines[a].length >= 8) {
+        var addr = rawLines[a]; used[a] = true;
+        if (rawLines[a + 1] && !used[a + 1] && !/@|\d{3,}[\s\-]\d{3,}/.test(rawLines[a + 1]) && (ADDR_RE.test(rawLines[a + 1]) || rawLines[a + 1].length < 20)) {
+          addr += " " + rawLines[a + 1]; used[a + 1] = true;
+        }
+        out.address = addr;
+        break;
+      }
+    }
+
+    // ---- department (own line) ----
+    for (var d = 0; d < rawLines.length; d++) {
+      if (used[d]) continue;
+      var dm = rawLines[d].match(DEPT_RE);
+      if (dm && rawLines[d].length <= 40 && !COMPANY_RE.test(rawLines[d])) {
+        out.dept = dm[1].trim(); used[d] = true; break;
+      }
+    }
+
+    // ---- name + title ----
+    function isJobTitle(s) {
+      return TITLE_ONLY_RE.test(s) ||
+        /^(선임|책임|수석|전임|주임|총괄|영업|기술|수석|담당)?(연구원|매니저|팀장|부장|차장|과장|대리|엔지니어|컨설턴트|디렉터|리더|위원)$/.test(s);
+    }
+    // 1) standalone Korean name line (exactly 2-4 hangul, not a job title)
+    for (var n = 0; n < rawLines.length; n++) {
+      if (used[n]) continue;
+      var compact = rawLines[n].replace(/\s/g, "");
+      if (/^[가-힣]{2,4}$/.test(compact) && !isJobTitle(compact) && !COMPANY_RE.test(compact)) {
+        out.name = compact; used[n] = true; break;
+      }
+    }
+    // 2) title line (may also carry the name)
+    for (var t = 0; t < rawLines.length; t++) {
+      if (used[t]) continue;
+      var tl = rawLines[t];
+      if (!TITLE_RE.test(tl) || tl.length > 44) continue;
+      if (!out.name) {
+        var mNT = tl.match(NAME_TITLE_RE), mTN = tl.match(TITLE_NAME_RE);
+        if (mTN && !isJobTitle(mTN[2])) { out.name = mTN[2]; if (!out.title) out.title = mTN[1]; used[t] = true; break; }
+        if (mNT && !isJobTitle(mNT[1])) { out.name = mNT[1]; }
+      }
+      var titlePart = tl.split(/\s*[\/|]\s*/)[0].trim();
+      if (out.name && titlePart.indexOf(out.name) === 0) titlePart = titlePart.slice(out.name.length).replace(/^[\s\/,·|]+/, "").trim();
+      if (!out.title && titlePart) out.title = titlePart;
+      used[t] = true; break;
+    }
+    // 3) English name fallback (two/three capitalised words)
+    if (!out.name) {
+      for (var e = 0; e < rawLines.length; e++) {
+        if (used[e]) continue;
+        var ln = rawLines[e];
+        if (/[@\d]/.test(ln) || COMPANY_RE.test(ln) || ADDR_RE.test(ln)) continue;
+        var words = ln.split(/\s+/);
+        if (words.length >= 2 && words.length <= 3 && words.every(function (w) { return /^[A-Za-z][A-Za-z.\-]*$/.test(w); }) && ln.length <= 30) {
+          out.name = ln; used[e] = true; break;
+        }
+      }
+    }
+
+    // ---- company fallback: a remaining line near the top ----
+    if (!out.company) {
+      for (var c2 = 0; c2 < Math.min(rawLines.length, 5); c2++) {
+        if (used[c2]) continue;
+        var cl = rawLines[c2];
+        if (/@/.test(cl) || cl === out.name || cl === out.address || TITLE_ONLY_RE.test(cl.replace(/\s/g, ""))) continue;
+        if (cl.length >= 2 && cl.length <= 40) { out.company = cl; used[c2] = true; break; }
+      }
+    }
+    return out;
+  }
+
+  /* ---------- vCard ---------- */
+  function vcard(card) {
+    function esc(s) { return String(s || "").replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/,/g, "\\,").replace(/;/g, "\\;"); }
+    var L = ["BEGIN:VCARD", "VERSION:3.0"];
+    L.push("N:" + esc(card.name) + ";;;;");
+    L.push("FN:" + esc(card.name || card.company || "Card"));
+    if (card.company || card.dept) L.push("ORG:" + esc(card.company) + (card.dept ? ";" + esc(card.dept) : ""));
+    if (card.title) L.push("TITLE:" + esc(card.title));
+    if (card.mobile) L.push("TEL;TYPE=CELL:" + esc(card.mobile));
+    if (card.phone) L.push("TEL;TYPE=WORK,VOICE:" + esc(card.phone));
+    if (card.fax) L.push("TEL;TYPE=FAX:" + esc(card.fax));
+    if (card.email) L.push("EMAIL;TYPE=WORK:" + esc(card.email));
+    if (card.website) L.push("URL:" + esc(card.website));
+    if (card.address) L.push("ADR;TYPE=WORK:;;" + esc(card.address) + ";;;;");
+    if (card.note) L.push("NOTE:" + esc(card.note));
+    L.push("REV:" + new Date(card.updatedAt || Date.now()).toISOString());
+    L.push("END:VCARD");
+    return L.join("\r\n");
+  }
+  function downloadFile(name, content, mime) {
+    var blob = new Blob([content], { type: mime || "text/plain;charset=utf-8" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
+  }
+
+  /* ---------- view routing ---------- */
+  var view = "list";
+  function show(v) {
+    view = v;
+    $("view-list").hidden = v !== "list";
+    $("view-capture").hidden = v !== "capture";
+    $("view-detail").hidden = v !== "detail";
+    window.scrollTo(0, 0);
+  }
+
+  /* ---------- list ---------- */
+  var query = "";
+  var sortMode = "recent";
+  var tagFilter = "";
+
+  function matches(card, q) {
+    if (!q) return true;
+    var hay = [card.name, card.title, card.company, card.dept, card.mobile, card.phone, card.email, card.website, card.address, card.note, (card.tags || []).join(" ")].join(" ").toLowerCase();
+    return q.toLowerCase().split(/\s+/).every(function (tok) { return hay.indexOf(tok) !== -1; });
+  }
+  function allTags() {
+    var set = {};
+    cards.forEach(function (c) { (c.tags || []).forEach(function (t) { set[t] = true; }); });
+    return Object.keys(set).sort(function (a, b) { return a.localeCompare(b); });
+  }
+  function sortCards(list) {
+    var l = list.slice();
+    if (sortMode === "name") l.sort(function (a, b) { return (a.name || "~").localeCompare(b.name || "~"); });
+    else if (sortMode === "company") l.sort(function (a, b) { return (a.company || "~").localeCompare(b.company || "~"); });
+    else l.sort(function (a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });
+    return l;
+  }
+
+  function renderList() {
+    var tags = allTags();
+    var filtEl = $("filters");
+    if (tags.length) {
+      filtEl.hidden = false;
+      filtEl.innerHTML = "";
+      var mkPill = function (label, val) {
+        var b = document.createElement("button");
+        b.type = "button"; b.className = "filter-pill";
+        b.textContent = label;
+        b.setAttribute("data-active", tagFilter === val ? "true" : "false");
+        b.addEventListener("click", function () { tagFilter = (tagFilter === val ? "" : val); renderList(); });
+        return b;
+      };
+      filtEl.appendChild(mkPill(T("allTag"), ""));
+      tags.forEach(function (t) { filtEl.appendChild(mkPill(t, t)); });
+    } else {
+      filtEl.hidden = true;
+    }
+
+    var list = cards.filter(function (c) { return matches(c, query) && (!tagFilter || (c.tags || []).indexOf(tagFilter) !== -1); });
+    list = sortCards(list);
+
+    var grid = $("card-grid");
+    grid.innerHTML = "";
+    list.forEach(function (card) {
+      var li = document.createElement("li");
+      var tile = document.createElement("button");
+      tile.type = "button"; tile.className = "card-tile";
+      tile.addEventListener("click", function () { openDetail(card.id); });
+
+      var thumb = card.thumb || card.imageURL || localImages[card.id] || "";
+      if (thumb) {
+        var im = document.createElement("img");
+        im.className = "tile-img"; im.loading = "lazy"; im.alt = card.name || card.company || "";
+        im.src = thumb;
+        tile.appendChild(im);
+      } else {
+        var ph = document.createElement("div");
+        ph.className = "tile-img placeholder";
+        ph.textContent = (card.name || card.company || "?").trim().charAt(0).toUpperCase();
+        tile.appendChild(ph);
+      }
+
+      var body = document.createElement("div");
+      body.className = "tile-body";
+      var nm = document.createElement("div");
+      nm.className = "tile-name";
+      nm.textContent = card.name || card.company || "—";
+      body.appendChild(nm);
+      var subParts = [];
+      if (card.title) subParts.push(card.title);
+      if (card.company && card.company !== nm.textContent) subParts.push(card.company);
+      if (subParts.length) {
+        var sub = document.createElement("div");
+        sub.className = "tile-sub";
+        sub.textContent = subParts.join(" · ");
+        body.appendChild(sub);
+      }
+      if ((card.tags || []).length) {
+        var tg = document.createElement("div");
+        tg.className = "tile-tags";
+        card.tags.slice(0, 4).forEach(function (t) {
+          var s = document.createElement("span");
+          s.className = "tile-tag"; s.textContent = t;
+          tg.appendChild(s);
+        });
+        body.appendChild(tg);
+      }
+      tile.appendChild(body);
+      li.appendChild(tile);
+      grid.appendChild(li);
+    });
+
+    var empty = $("empty-state");
+    if (list.length === 0) {
+      empty.hidden = false;
+      $("empty-text").textContent = cards.length === 0 ? T("emptyNone") : T("emptySearch");
+    } else {
+      empty.hidden = true;
+    }
+
+    var n = cards.length;
+    $("count").innerHTML = n === 0 ? "" : fmt(T(n === 1 ? "countOne" : "count"), { n: "<strong>" + n + "</strong>" });
+  }
+
+  /* ---------- detail ---------- */
+  var currentId = null;
+  var deleteArmed = false;
+  var deleteTimer;
+
+  function fieldRow(labelKey, value, kind) {
+    if (!value) return null;
+    var row = document.createElement("div");
+    row.className = "field-row";
+    var main = document.createElement("div");
+    main.className = "fr-main";
+    var lab = document.createElement("span");
+    lab.className = "fr-label"; lab.textContent = T(labelKey);
+    var val = document.createElement("div");
+    val.className = "fr-value";
+    if (kind === "tel") val.innerHTML = '<a href="tel:' + value.replace(/[^\d+]/g, "") + '">' + escapeHtml(value) + "</a>";
+    else if (kind === "email") val.innerHTML = '<a href="mailto:' + escapeHtml(value) + '">' + escapeHtml(value) + "</a>";
+    else if (kind === "url") {
+      var href = /^https?:\/\//.test(value) ? value : "https://" + value;
+      val.innerHTML = '<a href="' + escapeHtml(href) + '" target="_blank" rel="noopener">' + escapeHtml(value) + "</a>";
+    } else val.textContent = value;
+    main.appendChild(lab); main.appendChild(val);
+    row.appendChild(main);
+
+    var acts = document.createElement("div");
+    acts.className = "fr-actions";
+    var copyBtn = document.createElement("button");
+    copyBtn.type = "button"; copyBtn.className = "icon-btn"; copyBtn.title = T("copy"); copyBtn.textContent = "⧉";
+    copyBtn.addEventListener("click", function () { copyText(value); });
+    acts.appendChild(copyBtn);
+    if (kind === "tel") {
+      var callBtn = document.createElement("a");
+      callBtn.className = "icon-btn"; callBtn.href = "tel:" + value.replace(/[^\d+]/g, ""); callBtn.title = T("call"); callBtn.textContent = "☎";
+      acts.appendChild(callBtn);
+    }
+    if (kind === "email") {
+      var mailBtn = document.createElement("a");
+      mailBtn.className = "icon-btn"; mailBtn.href = "mailto:" + value; mailBtn.title = T("mail"); mailBtn.textContent = "✉";
+      acts.appendChild(mailBtn);
+    }
+    if (kind === "addr") {
+      var mapBtn = document.createElement("a");
+      mapBtn.className = "icon-btn"; mapBtn.href = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(value);
+      mapBtn.target = "_blank"; mapBtn.rel = "noopener"; mapBtn.title = T("map"); mapBtn.textContent = "🗺";
+      acts.appendChild(mapBtn);
+    }
+    row.appendChild(acts);
+    return row;
+  }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function openDetail(id) {
+    var card = cards.filter(function (c) { return c.id === id; })[0];
+    if (!card) return;
+    currentId = id;
+    deleteArmed = false;
+    $("det-delete").textContent = T("detDelete");
+
+    var img = fullImage(card);
+    var wrap = $("detail-img-wrap");
+    if (img) {
+      wrap.hidden = false;
+      $("detail-img").src = img;
+    } else {
+      wrap.hidden = true;
+    }
+    $("detail-name").textContent = card.name || card.company || "—";
+    var role = [];
+    if (card.title) role.push(card.title);
+    if (card.dept) role.push(card.dept);
+    if (card.company && card.company !== $("detail-name").textContent) role.push(card.company);
+    $("detail-role").textContent = role.join(" · ");
+    $("detail-role").hidden = role.length === 0;
+
+    var box = $("detail-fields");
+    box.innerHTML = "";
+    [
+      fieldRow("lCompany", card.company !== $("detail-name").textContent ? card.company : "", "text"),
+      fieldRow("lMobile", card.mobile, "tel"),
+      fieldRow("lPhone", card.phone, "tel"),
+      fieldRow("lFax", card.fax, "tel"),
+      fieldRow("lEmail", card.email, "email"),
+      fieldRow("lWebsite", card.website, "url"),
+      fieldRow("lAddress", card.address, "addr"),
+      fieldRow("lNote", card.note, "text")
+    ].forEach(function (r) { if (r) box.appendChild(r); });
+
+    var tg = $("detail-tags");
+    tg.innerHTML = "";
+    if ((card.tags || []).length) {
+      tg.hidden = false;
+      card.tags.forEach(function (t) {
+        var s = document.createElement("span");
+        s.className = "detail-tag"; s.textContent = t;
+        tg.appendChild(s);
+      });
+    } else { tg.hidden = true; }
+
+    var d = new Date(card.createdAt);
+    var meta = fmt(T("addedOn"), { d: d.toLocaleDateString(T("locale"), { year: "numeric", month: "short", day: "numeric" }) });
+    if (card.updatedAt && card.updatedAt - card.createdAt > 60000) {
+      meta += fmt(T("updatedOn"), { d: new Date(card.updatedAt).toLocaleDateString(T("locale"), { year: "numeric", month: "short", day: "numeric" }) });
+    }
+    $("detail-meta").textContent = meta;
+
+    show("detail");
+  }
+
+  $("det-back").addEventListener("click", function () { show("list"); renderList(); });
+  $("det-edit").addEventListener("click", function () {
+    var card = cards.filter(function (c) { return c.id === currentId; })[0];
+    if (card) startEdit(card);
+  });
+  $("det-vcf").addEventListener("click", function () {
+    var card = cards.filter(function (c) { return c.id === currentId; })[0];
+    if (card) downloadFile((card.name || card.company || "card").replace(/[^\w가-힣.\-]+/g, "_") + ".vcf", vcard(card), "text/vcard;charset=utf-8");
+  });
+  $("det-delete").addEventListener("click", function () {
+    if (!deleteArmed) {
+      deleteArmed = true;
+      $("det-delete").textContent = T("deleteArm");
+      clearTimeout(deleteTimer);
+      deleteTimer = setTimeout(function () { deleteArmed = false; $("det-delete").textContent = T("detDelete"); }, 4000);
+      return;
+    }
+    var id = currentId;
+    var card = cards.filter(function (c) { return c.id === id; })[0];
+    cards = cards.filter(function (c) { return c.id !== id; });
+    delete localImages[id]; saveImages();
+    if (card && card.imagePath && syncApi && syncApi.deleteImage) syncApi.deleteImage(card.imagePath);
+    save();
+    toast(T("deleted"));
+    show("list"); renderList();
+  });
+
+  $("detail-img").addEventListener("click", function () {
+    var src = $("detail-img").src;
+    if (!src) return;
+    var lb = document.createElement("div");
+    lb.className = "lightbox";
+    var im = document.createElement("img");
+    im.src = src;
+    lb.appendChild(im);
+    lb.addEventListener("click", function () { document.body.removeChild(lb); });
+    document.body.appendChild(lb);
+  });
+
+  /* ---------- capture / edit ---------- */
+  var captureQueue = [];   // [{dataURL}]
+  var queueIndex = 0;
+  var editingId = null;    // set when editing an existing card
+  var pendingImg = null;   // { thumb, medium } for the card being saved
+
+  function resetCaptureForm() {
+    FIELDS.forEach(function (f) { var el = $("f-" + f); if (el) el.value = ""; });
+    $("f-tags").value = "";
+    $("capture-preview").hidden = true;
+    $("preview-img").src = "";
+    $("ocr-status").hidden = true;
+    $("ocr-bar-fill").style.width = "0";
+    $("raw-toggle").hidden = true;
+    $("raw-text").hidden = true;
+    $("raw-text").textContent = "";
+    pendingImg = null;
+  }
+
+  function startAdd() {
+    editingId = null;
+    captureQueue = [];
+    queueIndex = 0;
+    resetCaptureForm();
+    $("cap-title").textContent = T("capTitleNew");
+    $("dropzone").hidden = false;
+    $("manual-btn").hidden = false;
+    $("file-input").hidden = false;
+    $("queue-tag").hidden = true;
+    $("field-form").hidden = true;
+    $("skip-card-btn").hidden = true;
+    $("save-card-btn").textContent = T("save");
+    show("capture");
+  }
+
+  function startEdit(card) {
+    editingId = card.id;
+    captureQueue = [];
+    queueIndex = 0;
+    resetCaptureForm();
+    $("cap-title").textContent = T("capTitleEdit");
+    $("dropzone").hidden = true;
+    $("manual-btn").hidden = true;
+    $("queue-tag").hidden = true;
+    FIELDS.forEach(function (f) { var el = $("f-" + f); if (el) el.value = card[f] || ""; });
+    $("f-tags").value = (card.tags || []).join(", ");
+    var img = fullImage(card);
+    if (img) { $("capture-preview").hidden = false; $("preview-img").src = img; }
+    if (card.rawText) {
+      $("raw-toggle").hidden = false;
+      $("raw-text").textContent = card.rawText;
+    }
+    $("field-form").hidden = false;
+    $("skip-card-btn").hidden = true;
+    $("save-card-btn").textContent = T("save");
+    show("capture");
+  }
+
+  function enqueueFiles(fileList) {
+    var files = Array.prototype.slice.call(fileList).filter(function (f) { return /^image\//.test(f.type) || /\.(jpe?g|png|heic|heif|webp|gif)$/i.test(f.name); });
+    if (!files.length) return;
+    Promise.all(files.map(fileToDataURL)).then(function (urls) {
+      captureQueue = urls.map(function (u) { return { dataURL: u }; });
+      queueIndex = 0;
+      $("dropzone").hidden = true;
+      $("manual-btn").hidden = true;
+      processQueueItem();
+    });
+  }
+
+  function updateQueueTag() {
+    if (captureQueue.length > 1) {
+      $("queue-tag").hidden = false;
+      $("queue-tag").textContent = fmt(T("queue"), { i: queueIndex + 1, n: captureQueue.length });
+      $("skip-card-btn").hidden = false;
+      $("skip-card-btn").textContent = T("skip");
+      $("save-card-btn").textContent = queueIndex + 1 < captureQueue.length ? T("saveNext") : T("save");
+    } else {
+      $("queue-tag").hidden = true;
+      $("skip-card-btn").hidden = true;
+      $("save-card-btn").textContent = T("save");
+    }
+  }
+
+  function processQueueItem() {
+    var item = captureQueue[queueIndex];
+    if (!item) { finishQueue(); return; }
+    resetCaptureForm();
+    updateQueueTag();
+    $("field-form").hidden = false;
+    $("capture-preview").hidden = false;
+    $("preview-img").src = item.dataURL;
+
+    // build stored images
+    loadImg(item.dataURL).then(function (img) {
+      pendingImg = {
+        thumb: resizeToDataURL(img, 320, 0.62),
+        medium: resizeToDataURL(img, 1000, 0.78),
+        ocrSrc: resizeToDataURL(img, 1600, 0.9)
+      };
+      // OCR
+      $("ocr-status").hidden = false;
+      $("ocr-label").textContent = T(ocrLangLoaded ? "ocrReady" : "ocrDownloading");
+      $("ocr-bar-fill").style.width = ocrLangLoaded ? "8%" : "3%";
+      runOCR(pendingImg.ocrSrc, function (p) {
+        if (p < 0) { $("ocr-label").textContent = T("ocrDownloading"); return; }
+        $("ocr-label").textContent = T("ocrReady");
+        $("ocr-bar-fill").style.width = Math.max(8, Math.round(p * 100)) + "%";
+      }).then(function (text) {
+        $("ocr-bar-fill").style.width = "100%";
+        $("ocr-label").textContent = T("ocrDone");
+        setTimeout(function () { $("ocr-status").hidden = true; }, 1400);
+        var parsed = parseCard(text);
+        FIELDS.forEach(function (f) {
+          if (parsed[f] && !$("f-" + f).value) $("f-" + f).value = parsed[f];
+        });
+        if (text) {
+          $("raw-toggle").hidden = false;
+          $("raw-text").textContent = text;
+        }
+        var firstEmpty = $("f-name").value ? $("f-company") : $("f-name");
+        try { firstEmpty.focus(); } catch (e) {}
+      }).catch(function (err) {
+        $("ocr-status").hidden = true;
+        $("ocr-label").textContent = "";
+        toast(T(err && err.message === "no-engine" ? "ocrNoEngine" : "ocrFailed"));
+      });
+    });
+  }
+
+  function finishQueue() {
+    captureQueue = [];
+    queueIndex = 0;
+    editingId = null;
+    show("list");
+    renderList();
+  }
+
+  function collectForm() {
+    var c = { tags: $("f-tags").value.split(",").map(function (s) { return s.trim(); }).filter(Boolean) };
+    FIELDS.forEach(function (f) { c[f] = $("f-" + f).value.trim(); });
+    c.rawText = $("raw-text").textContent || "";
+    return c;
+  }
+
+  function saveCurrentCard() {
+    var form = collectForm();
+    if (!form.name && !form.company) { toast(T("needName")); return; }
+
+    if (editingId) {
+      var idx = -1;
+      for (var i = 0; i < cards.length; i++) if (cards[i].id === editingId) { idx = i; break; }
+      if (idx !== -1) {
+        var merged = normalizeCard(Object.assign({}, cards[idx], form, { updatedAt: Date.now() }));
+        cards[idx] = merged;
+        save();
+        toast(T("saved"));
+        var savedId = editingId;
+        editingId = null;
+        openDetail(savedId);
+        renderList();
+      }
+      return;
+    }
+
+    var card = normalizeCard(Object.assign({}, form, {
+      id: makeId(),
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    }));
+    if (pendingImg) {
+      card.thumb = pendingImg.thumb;
+      card.img = pendingImg.medium;
+    }
+    cards.push(card);
+
+    // try Storage upload; fall back to inline medium image
+    if (pendingImg && syncApi && syncApi.hasStorage && syncApi.hasStorage()) {
+      var blob = dataURLtoBlob(pendingImg.medium);
+      syncApi.uploadImage(card.id, blob).then(function (r) {
+        card.imageURL = r.url; card.imagePath = r.path; card.img = "";
+        save();
+      }).catch(function () {
+        externalize(card);   // keep medium locally, out of the synced blob
+        save();
+      });
+    } else {
+      externalize(card);
+    }
+    save();
+
+    var more = queueIndex + 1 < captureQueue.length;
+    if (more) {
+      queueIndex++;
+      toast(T("saved"));
+      processQueueItem();
+    } else {
+      toast(captureQueue.length > 1 ? T("savedAll") : T("saved"));
+      finishQueue();
+    }
+  }
+
+  $("field-form").addEventListener("submit", function (e) { e.preventDefault(); saveCurrentCard(); });
+  $("skip-card-btn").addEventListener("click", function () {
+    var more = queueIndex + 1 < captureQueue.length;
+    if (more) { queueIndex++; processQueueItem(); } else { finishQueue(); }
+  });
+  $("cancel-card-btn").addEventListener("click", function () {
+    if (editingId) { var id = editingId; editingId = null; openDetail(id); }
+    else finishQueue();
+  });
+  $("cap-back").addEventListener("click", function () {
+    if (editingId) { var id = editingId; editingId = null; openDetail(id); }
+    else { show("list"); renderList(); }
+  });
+
+  $("add-card-btn").addEventListener("click", startAdd);
+  $("manual-btn").addEventListener("click", function () {
+    captureQueue = []; queueIndex = 0;
+    resetCaptureForm();
+    $("dropzone").hidden = true;
+    $("manual-btn").hidden = true;
+    $("field-form").hidden = false;
+    $("f-name").focus();
+  });
+
+  var dz = $("dropzone");
+  dz.addEventListener("click", function () { $("file-input").click(); });
+  dz.addEventListener("dragover", function (e) { e.preventDefault(); dz.classList.add("drag"); });
+  dz.addEventListener("dragleave", function () { dz.classList.remove("drag"); });
+  dz.addEventListener("drop", function (e) {
+    e.preventDefault(); dz.classList.remove("drag");
+    if (e.dataTransfer && e.dataTransfer.files) enqueueFiles(e.dataTransfer.files);
+  });
+  $("file-input").addEventListener("change", function (e) {
+    if (e.target.files && e.target.files.length) enqueueFiles(e.target.files);
+    e.target.value = "";
+  });
+
+  $("raw-toggle").addEventListener("click", function () {
+    var el = $("raw-text");
+    el.hidden = !el.hidden;
+    $("raw-toggle").textContent = el.hidden ? T("rawShow") : T("rawHide");
+  });
+
+  /* ---------- search / sort ---------- */
+  $("search").addEventListener("input", function (e) {
+    query = e.target.value.trim();
+    $("search-clear").hidden = !query;
+    renderList();
+  });
+  $("search").addEventListener("keydown", function (e) {
+    if (e.key === "Escape") { e.target.value = ""; query = ""; $("search-clear").hidden = true; renderList(); }
+  });
+  $("search-clear").addEventListener("click", function () {
+    $("search").value = ""; query = ""; $("search-clear").hidden = true; renderList(); $("search").focus();
+  });
+  $("sort-select").addEventListener("change", function (e) { sortMode = e.target.value; renderList(); });
+
+  /* ---------- backup / transfer ---------- */
+  $("export-btn").addEventListener("click", function () {
+    var payload = { cards: cards.map(function (c) {
+      var o = Object.assign({}, c);
+      o.img = "";           // full images excluded from JSON
+      return o;
+    }), v: 1, exportedAt: new Date().toISOString() };
+    $("io-box").value = JSON.stringify(payload, null, 2);
+    $("io-box").focus(); $("io-box").select();
+    toast(T("fillOk"));
+  });
+
+  var importArmed = false, importArmTimer;
+  $("import-btn").addEventListener("click", function () {
+    var raw = $("io-box").value.trim();
+    if (!raw) { toast(T("importEmpty")); return; }
+    var parsed;
+    try { parsed = JSON.parse(raw); } catch (e) { toast(T("importBad")); return; }
+    var incoming = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.cards) ? parsed.cards : null);
+    if (!incoming) { toast(T("importBad")); return; }
+    if (cards.length && !importArmed) {
+      importArmed = true;
+      $("import-btn").textContent = T("importArm");
+      clearTimeout(importArmTimer);
+      importArmTimer = setTimeout(function () { importArmed = false; $("import-btn").textContent = T("importBtn"); }, 4000);
+      return;
+    }
+    clearTimeout(importArmTimer);
+    importArmed = false;
+    $("import-btn").textContent = T("importBtn");
+    var byId = {};
+    cards.forEach(function (c) { byId[c.id] = c; });
+    incoming.map(normalizeCard).forEach(function (c) {
+      if (byId[c.id]) {
+        var ex = byId[c.id];
+        if ((c.updatedAt || 0) >= (ex.updatedAt || 0)) Object.assign(ex, c);
+      } else {
+        cards.push(c); byId[c.id] = c;
+      }
+    });
+    save();
+    renderList();
+    toast(fmt(T("importDone"), { n: cards.length }));
+  });
+
+  $("vcf-all-btn").addEventListener("click", function () {
+    if (!cards.length) { toast(T("vcfNone")); return; }
+    var all = cards.map(vcard).join("\r\n");
+    downloadFile("card-wallet.vcf", all, "text/vcard;charset=utf-8");
+  });
+
+  /* ---------- live sync ---------- */
+  var syncActive = false;
+  var syncApi = null;
+  var myRev = null;
+  var reconciled = false;
+  var pushTimer = null;
+
+  function syncPayloadCards() {
+    // never sync the local-only full image ("img"); thumb + storage URL are fine
+    return cards.map(function (c) {
+      var o = Object.assign({}, c);
+      o.img = "";
+      return o;
+    });
+  }
+  function schedulePush() {
+    if (!syncApi) return;
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(pushRemote, 700);
+  }
+  function pushRemote() {
+    if (!syncApi) return;
+    var rev = makeId();
+    myRev = rev;
+    var attempt = syncApi.push({ cards: syncPayloadCards(), rev: rev, updatedAt: Date.now() });
+    if (attempt && typeof attempt.catch === "function") {
+      attempt.catch(function () { clearTimeout(pushTimer); pushTimer = setTimeout(pushRemote, 4000); });
+    }
+  }
+  function mergeById(remoteList, localList) {
+    var out = [], seen = {};
+    (remoteList || []).forEach(function (c) { if (c && c.id) { seen[c.id] = c; out.push(normalizeCard(c)); } });
+    (localList || []).forEach(function (c) {
+      if (!c || !c.id) return;
+      if (!seen[c.id]) { out.push(c); return; }
+    });
+    // prefer newer updatedAt when an id is on both sides
+    var byId = {};
+    out.forEach(function (c) { byId[c.id] = c; });
+    (localList || []).forEach(function (c) {
+      if (c && c.id && byId[c.id] && (c.updatedAt || 0) > (byId[c.id].updatedAt || 0)) {
+        Object.assign(byId[c.id], c, { img: byId[c.id].img });
+      }
+    });
+    return out;
+  }
+  function adoptRemote(d) {
+    var incoming = (d.cards || []).map(normalizeCard);
+    // keep any local-only full images we still have
+    cards = incoming;
+    saveLocal();
+    renderList();
+    if (view === "detail" && currentId) openDetail(currentId);
+  }
+  function onRemote(d) {
+    var goLive = function () { if (!syncActive) { syncActive = true; applyLang(); } };
+
+    if (d === null || d === undefined || typeof d !== "object") {
+      reconciled = true; goLive();
+      if (cards.length) pushRemote();
+      return;
+    }
+    if (d.rev && d.rev === myRev) { reconciled = true; goLive(); return; }
+
+    var remoteCards = Array.isArray(d.cards) ? d.cards : [];
+    if (!reconciled) {
+      reconciled = true;
+      if (cards.length && remoteCards.length) {
+        cards = mergeById(remoteCards, cards);
+        saveLocal(); renderList(); pushRemote();
+      } else if (remoteCards.length) {
+        adoptRemote(d);
+      } else if (cards.length) {
+        pushRemote();
+      }
+      goLive();
+      return;
+    }
+    adoptRemote(d);
+    goLive();
+  }
+  function setupSync(api) {
+    syncApi = api;
+    api.ready.then(function (ok) {
+      if (!ok) { syncApi = null; return; }
+      api.subscribe(onRemote);
+    }).catch(function () { syncApi = null; });
+  }
+  function whenSyncDecided(cb) {
+    if (window.CW_SYNC_DECIDED) { cb(window.CW_SYNC || null); return; }
+    var done = false;
+    var fire = function () { if (done) return; done = true; cb(window.CW_SYNC || null); };
+    window.addEventListener("cw-sync-decided", fire, { once: true });
+    setTimeout(fire, 12000);
+  }
+
+  /* ---------- service worker ---------- */
+  function registerServiceWorker() {
+    if (!("serviceWorker" in navigator)) return;
+    var reloaded = false;
+    navigator.serviceWorker.addEventListener("controllerchange", function () {
+      if (reloaded) return;
+      reloaded = true;
+      location.reload();
+    });
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("sw.js").then(function (reg) {
+        if (reg.waiting) reg.waiting.postMessage("skip-waiting");
+        reg.addEventListener("updatefound", function () {
+          var nw = reg.installing;
+          if (nw) nw.addEventListener("statechange", function () {
+            if (nw.state === "installed" && navigator.serviceWorker.controller) nw.postMessage("skip-waiting");
+          });
+        });
+        reg.update();
+        setInterval(function () { reg.update(); }, 60 * 60 * 1000);
+      }).catch(function () {});
+    });
+  }
+
+  /* ---------- language ---------- */
+  function setText(id, s) { var el = $(id); if (el) el.textContent = s; }
+  function applyLang() {
+    document.documentElement.lang = T("htmlLang");
+    document.title = T("title");
+    setText("eyebrow", T(syncActive ? "eyebrowSync" : "eyebrow"));
+    setText("app-title", T("title"));
+    setText("subtitle", T(syncActive ? "subtitleSync" : "subtitle"));
+    setText("add-card-btn", T("addCard"));
+    $("search").placeholder = T("searchPh");
+    var so = $("sort-select").options;
+    so[0].text = T("sortRecent"); so[1].text = T("sortName"); so[2].text = T("sortCompany");
+    setText("dz-main", T("dzMain"));
+    setText("dz-hint", T("dzHint"));
+    setText("manual-btn", T("manual"));
+    setText("cap-back", T("back"));
+    setText("det-back", T("back"));
+    setText("cap-title", T(editingId ? "capTitleEdit" : "capTitleNew"));
+    setText("l-name", T("lName")); setText("l-title", T("lTitle")); setText("l-company", T("lCompany"));
+    setText("l-dept", T("lDept")); setText("l-mobile", T("lMobile")); setText("l-phone", T("lPhone"));
+    setText("l-fax", T("lFax")); setText("l-email", T("lEmail")); setText("l-website", T("lWebsite"));
+    setText("l-address", T("lAddress")); setText("l-tags", T("lTags")); setText("l-note", T("lNote"));
+    $("f-tags").placeholder = T("tagsHint");
+    $("raw-toggle").textContent = $("raw-text").hidden ? T("rawShow") : T("rawHide");
+    setText("cancel-card-btn", T("cancel"));
+    setText("det-edit", T("detEdit")); setText("det-vcf", T("detVcf"));
+    setText("det-delete", deleteArmed ? T("deleteArm") : T("detDelete"));
+    setText("transfer-summary", T("transferSummary"));
+    setText("transfer-desc", T("transferDesc"));
+    setText("export-btn", T("fill"));
+    $("import-btn").textContent = importArmed ? T("importArm") : T("importBtn");
+    setText("vcf-all-btn", T("vcfAll"));
+    updateQueueTag();
+
+    $("lang-toggle").querySelectorAll("button").forEach(function (b) {
+      b.setAttribute("data-active", b.getAttribute("data-lang") === lang ? "true" : "false");
+    });
+    $("lang-toggle").setAttribute("aria-label", T("langGroup"));
+
+    if (view === "list") renderList();
+    else if (view === "detail" && currentId) openDetail(currentId);
+  }
+  $("lang-toggle").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (!b) return;
+    lang = b.getAttribute("data-lang") === "ko" ? "ko" : "en";
+    try { localStorage.setItem(LANG_KEY, lang); } catch (err) {}
+    applyLang();
+  });
+
+  /* ---------- init ---------- */
+  registerServiceWorker();
+  show("list");
+  applyLang();
+  renderList();
+  whenSyncDecided(function (api) { if (api) setupSync(api); });
+})();
+</script>
+
+</body>
+</html>
