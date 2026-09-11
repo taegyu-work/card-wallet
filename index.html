@@ -346,6 +346,7 @@
     font-family: var(--font-mono); font-size: 11px; color: var(--text-faint);
     margin-top: 16px;
   }
+  #detail-contact-status { color: var(--good); margin-top: 12px; margin-bottom: 0; }
 
   /* --- lightbox --- */
   .lightbox {
@@ -501,6 +502,7 @@
       <button type="button" class="btn-sm" id="det-vcf"></button>
       <button type="button" class="danger-btn" id="det-delete"></button>
     </div>
+    <p class="detail-meta" id="detail-contact-status" hidden></p>
     <p class="detail-meta" id="detail-meta"></p>
   </section>
 </div>
@@ -638,6 +640,7 @@
       uploading: "Saving image…",
       detEdit: "Edit", detVcf: "📇 Add to Contacts", detDelete: "Delete",
       deleteArm: "Tap again to delete", deleted: "Card deleted",
+      contactAdded: "✓ Added to Contacts · {d}",
       addedOn: "Added {d}", updatedOn: " · updated {d}",
       call: "Call", mail: "Email", copy: "Copy", open: "Open", map: "Map",
       copied: "Copied",
@@ -689,6 +692,7 @@
       uploading: "이미지 저장 중…",
       detEdit: "수정", detVcf: "📇 연락처에 추가", detDelete: "삭제",
       deleteArm: "한 번 더 누르면 삭제", deleted: "명함을 삭제했어요",
+      contactAdded: "✓ 연락처에 추가됨 · {d}",
       addedOn: "{d} 추가", updatedOn: " · {d} 수정",
       call: "전화", mail: "메일", copy: "복사", open: "열기", map: "지도",
       copied: "복사했어요",
@@ -741,6 +745,7 @@
       imageURL: typeof c.imageURL === "string" ? c.imageURL : "",
       imagePath: typeof c.imagePath === "string" ? c.imagePath : "",
       rawText: String(c.rawText || "").slice(0, 4000),
+      contactAddedAt: typeof c.contactAddedAt === "number" ? c.contactAddedAt : null,
       createdAt: c.createdAt || Date.now(),
       updatedAt: c.updatedAt || c.createdAt || Date.now()
     };
@@ -879,6 +884,9 @@
   function vcard(card) {
     function esc(s) { return String(s || "").replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/,/g, "\\,").replace(/;/g, "\\;"); }
     var L = ["BEGIN:VCARD", "VERSION:3.0"];
+    // stable id: lets a Contacts app that honors vCard UID recognize a re-import
+    // of the same card as an update rather than a brand-new duplicate contact.
+    if (card.id) L.push("UID:cardwallet-" + card.id);
     L.push("N:" + esc(card.name) + ";;;;");
     L.push("FN:" + esc(card.name || card.company || "Card"));
     if (card.company || card.dept) L.push("ORG:" + esc(card.company) + (card.dept ? ";" + esc(card.dept) : ""));
@@ -1147,6 +1155,16 @@
       });
     } else { tg.hidden = true; }
 
+    var statusEl = $("detail-contact-status");
+    if (card.contactAddedAt) {
+      statusEl.hidden = false;
+      statusEl.textContent = fmt(T("contactAdded"), {
+        d: new Date(card.contactAddedAt).toLocaleDateString(T("locale"), { year: "numeric", month: "short", day: "numeric" })
+      });
+    } else {
+      statusEl.hidden = true;
+    }
+
     var d = new Date(card.createdAt);
     var meta = fmt(T("addedOn"), { d: d.toLocaleDateString(T("locale"), { year: "numeric", month: "short", day: "numeric" }) });
     if (card.updatedAt && card.updatedAt - card.createdAt > 60000) {
@@ -1166,7 +1184,11 @@
     var card = cards.filter(function (c) { return c.id === currentId; })[0];
     if (!card) return;
     saveToContacts(vcardFileName(card), vcard(card)).then(function (how) {
+      if (how === "cancelled") return;
       if (how === "downloaded") toast(T("savedToDownloads"));
+      card.contactAddedAt = Date.now();
+      save();
+      if (currentId === card.id) openDetail(card.id);
     });
   });
   $("det-delete").addEventListener("click", function () {
@@ -1507,7 +1529,12 @@
     if (!cards.length) { toast(T("vcfNone")); return; }
     var all = cards.map(vcard).join("\r\n");
     saveToContacts("card-wallet.vcf", all).then(function (how) {
+      if (how === "cancelled") return;
       if (how === "downloaded") toast(T("savedToDownloads"));
+      var now = Date.now();
+      cards.forEach(function (c) { c.contactAddedAt = now; });
+      save();
+      if (view === "detail" && currentId) openDetail(currentId);
     });
   });
 
