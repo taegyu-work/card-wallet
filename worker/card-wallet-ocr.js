@@ -16,7 +16,7 @@
  * -------------------------------------------------------------------------
  */
 
-const MODEL = "claude-haiku-4-5"; // cheap + plenty for card reading; bump to "claude-sonnet-5" for more accuracy
+const MODEL = "claude-sonnet-5"; // reliable on real photos + empty-field handling; "claude-haiku-4-5" is ~4x cheaper but fumbles absent fields
 const MAX_IMAGE_BYTES = 3_500_000; // ~3.5 MB decoded
 const ALLOWED_ORIGINS = [
   "https://taegyu-work.github.io",
@@ -31,7 +31,6 @@ const FIELDS = [
 const CARD_TOOL = {
   name: "record_card",
   description: "Record the contact details read from the business card.",
-  strict: true,
   input_schema: {
     type: "object",
     additionalProperties: false,
@@ -53,9 +52,11 @@ const CARD_TOOL = {
 };
 
 const PROMPT =
-  "This image is a business card. Read every detail you can and call record_card with it. " +
-  "The card may be Korean, English, or both. Use an empty string for any field that is not on the card — " +
-  "do not guess. Keep phone/fax numbers formatted exactly as printed. If a line combines a team and a title " +
+  "This image is a business card. Read the details and call record_card once. " +
+  "The card may be Korean, English, or both. " +
+  "For any field that is NOT printed on the card, set its value to an empty string \"\" — " +
+  "never a placeholder, a dash, 'N/A', an explanation, or any XML/markup. Do not guess. " +
+  "Keep phone/fax numbers formatted exactly as printed. If a line combines a team and a title " +
   "(e.g. '경영기획팀 | 선임'), split them into department and title.";
 
 function corsHeaders(origin) {
@@ -153,8 +154,19 @@ export default {
       return json({ ok: false, error: "the model did not return card fields" }, 502, origin);
     }
 
+    // reject placeholder / markup / harness-token leakage a weaker model can emit
+    const clean = (v) => {
+      if (typeof v !== "string") return "";
+      const s = v.trim();
+      if (!s) return "";
+      // markup / tool-harness token leakage (substring match)
+      if (/[<>]|antml|parameter\s+name=|function_calls|tool_use/i.test(s)) return "";
+      // whole-value placeholders
+      if (/^(n\/?a|none|null|undefined|없음|미기재|정보\s*없음|[-–—.\s]+)$/i.test(s)) return "";
+      return s.slice(0, 400);
+    };
     const out = {};
-    for (const f of FIELDS) out[f] = typeof block.input[f] === "string" ? block.input[f].trim() : "";
+    for (const f of FIELDS) out[f] = clean(block.input[f]);
 
     return json({
       ok: true,
