@@ -636,7 +636,7 @@
       needName: "Give the card a name or company first",
       saved: "Card saved", savedAll: "All cards saved",
       uploading: "Saving image…",
-      detEdit: "Edit", detVcf: "Export .vcf", detDelete: "Delete",
+      detEdit: "Edit", detVcf: "📇 Add to Contacts", detDelete: "Delete",
       deleteArm: "Tap again to delete", deleted: "Card deleted",
       addedOn: "Added {d}", updatedOn: " · updated {d}",
       call: "Call", mail: "Email", copy: "Copy", open: "Open", map: "Map",
@@ -649,8 +649,9 @@
       importBad: "That isn't the right format",
       fillOk: "Filled with your current data",
       importDone: "Imported — {n} cards total",
-      vcfAll: "Export all as .vcf",
+      vcfAll: "📇 Add all to Contacts",
       vcfNone: "No cards to export",
+      savedToDownloads: "Saved as a .vcf — open it from Downloads to add to Contacts",
       langGroup: "Language"
     },
     ko: {
@@ -686,7 +687,7 @@
       needName: "이름이나 회사를 먼저 입력하세요",
       saved: "명함을 저장했어요", savedAll: "모든 명함을 저장했어요",
       uploading: "이미지 저장 중…",
-      detEdit: "수정", detVcf: ".vcf 내보내기", detDelete: "삭제",
+      detEdit: "수정", detVcf: "📇 연락처에 추가", detDelete: "삭제",
       deleteArm: "한 번 더 누르면 삭제", deleted: "명함을 삭제했어요",
       addedOn: "{d} 추가", updatedOn: " · {d} 수정",
       call: "전화", mail: "메일", copy: "복사", open: "열기", map: "지도",
@@ -699,8 +700,9 @@
       importBad: "형식이 올바르지 않아요",
       fillOk: "현재 데이터를 채웠어요",
       importDone: "가져왔어요 — 총 {n}장",
-      vcfAll: "전체 .vcf로 내보내기",
+      vcfAll: "📇 전체 연락처에 추가",
       vcfNone: "내보낼 명함이 없어요",
+      savedToDownloads: ".vcf로 저장했어요 — 다운로드 폴더에서 열어 연락처에 추가하세요",
       langGroup: "언어"
     }
   };
@@ -866,6 +868,14 @@
 
 
   /* ---------- vCard ---------- */
+  // fold a "KEY:value" line to <=75 octets per RFC 2425/2426 (continuation lines start with one space)
+  function foldVCardLine(line) {
+    if (line.length <= 75) return line;
+    var out = line.slice(0, 75);
+    var i = 75;
+    while (i < line.length) { out += "\r\n " + line.slice(i, i + 74); i += 74; }
+    return out;
+  }
   function vcard(card) {
     function esc(s) { return String(s || "").replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/,/g, "\\,").replace(/;/g, "\\;"); }
     var L = ["BEGIN:VCARD", "VERSION:3.0"];
@@ -880,9 +890,32 @@
     if (card.website) L.push("URL:" + esc(card.website));
     if (card.address) L.push("ADR;TYPE=WORK:;;" + esc(card.address) + ";;;;");
     if (card.note) L.push("NOTE:" + esc(card.note));
+    // embed the thumbnail so the phone's own caller ID / contact card shows the photo
+    var thumb = card.thumb || card.img || "";
+    var m = thumb.match(/^data:image\/([a-z0-9]+);base64,(.+)$/i);
+    if (m) L.push(foldVCardLine("PHOTO;ENCODING=b;TYPE=" + m[1].toUpperCase() + ":" + m[2]));
     L.push("REV:" + new Date(card.updatedAt || Date.now()).toISOString());
     L.push("END:VCARD");
     return L.join("\r\n");
+  }
+  function vcardFileName(card) {
+    return (card.name || card.company || "card").replace(/[^\w가-힣.\-]+/g, "_") + ".vcf";
+  }
+  // Share-first "Add to Contacts": on a phone this hands the .vcf straight to the
+  // OS share sheet (Contacts is a direct target there). Falls back to a plain
+  // download — same as before — wherever Web Share for files isn't available.
+  function saveToContacts(filename, text) {
+    var file;
+    try { file = new File([text], filename, { type: "text/vcard" }); } catch (e) { file = null; }
+    if (file && navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
+      return navigator.share({ files: [file] }).then(function () { return "shared"; }, function (err) {
+        if (err && err.name === "AbortError") return "cancelled";
+        downloadFile(filename, text, "text/vcard;charset=utf-8");
+        return "downloaded";
+      });
+    }
+    downloadFile(filename, text, "text/vcard;charset=utf-8");
+    return Promise.resolve("downloaded");
   }
   function downloadFile(name, content, mime) {
     var blob = new Blob([content], { type: mime || "text/plain;charset=utf-8" });
@@ -1131,7 +1164,10 @@
   });
   $("det-vcf").addEventListener("click", function () {
     var card = cards.filter(function (c) { return c.id === currentId; })[0];
-    if (card) downloadFile((card.name || card.company || "card").replace(/[^\w가-힣.\-]+/g, "_") + ".vcf", vcard(card), "text/vcard;charset=utf-8");
+    if (!card) return;
+    saveToContacts(vcardFileName(card), vcard(card)).then(function (how) {
+      if (how === "downloaded") toast(T("savedToDownloads"));
+    });
   });
   $("det-delete").addEventListener("click", function () {
     if (!deleteArmed) {
@@ -1470,7 +1506,9 @@
   $("vcf-all-btn").addEventListener("click", function () {
     if (!cards.length) { toast(T("vcfNone")); return; }
     var all = cards.map(vcard).join("\r\n");
-    downloadFile("card-wallet.vcf", all, "text/vcard;charset=utf-8");
+    saveToContacts("card-wallet.vcf", all).then(function (how) {
+      if (how === "downloaded") toast(T("savedToDownloads"));
+    });
   });
 
   /* ---------- live sync ---------- */
