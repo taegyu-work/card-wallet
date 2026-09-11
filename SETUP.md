@@ -79,15 +79,18 @@ Full images are stripped from the synced payload; they live at
   (a `var` near the top of the classic `<script>` in `index.html`) —
   the deployed Worker `https://card-wallet-ocr.evertri-hr.workers.dev/`.
 - The Worker (`worker/card-wallet-ocr.js`) calls the Claude API
-  (`claude-haiku-4-5`) with a forced structured-output tool and returns
+  (`claude-sonnet-5`) with a forced tool call and returns
   `{ ok, fields: { name, title, department, company, mobile, phone, fax,
-  email, website, address, notes } }`. ~$0.002–0.004 per card.
+  email, website, address, notes } }`. ~$0.01–0.015 per card. (Haiku is
+  ~4× cheaper but leaked junk into fields not printed on the card; Sonnet
+  handles absent fields cleanly. Change `MODEL` in the Worker to switch.)
 - The `ANTHROPIC_API_KEY` lives as a **Worker secret** (Cloudflare dash →
   the Worker → Settings → Variables and Secrets). CORS is locked to
   `taegyu-work.github.io` + `localhost:8731`.
 - Every field is editable before you save. Set `OCR_ENDPOINT = ""` to turn
   auto-read off (capture then drops straight to a manual form).
-- Full deploy/redeploy steps for the Worker: `worker/DEPLOY.md`.
+- Redeploy the Worker: `cd worker && npx wrangler deploy` (wrangler is already
+  logged in on this machine). Full setup steps: `worker/DEPLOY.md`.
 - An earlier version used on-device Tesseract.js; it was too inaccurate on
   real phone photos of Korean cards and was removed.
 

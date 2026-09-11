@@ -1282,6 +1282,7 @@
         };
         Object.keys(map).forEach(function (k) {
           var v = (fields[k] || "").trim();
+          if (/[<>]|antml|parameter name=/i.test(v)) v = "";   // guard against stray markup
           var el = $("f-" + map[k]);
           if (v && el && !el.value) el.value = v;
         });

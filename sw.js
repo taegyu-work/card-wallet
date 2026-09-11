@@ -1,5 +1,5 @@
 /* Card Wallet service worker — offline shell cache. Bump CACHE on every release. */
-var CACHE = "card-wallet-v4";
+var CACHE = "card-wallet-v5";
 var ASSETS = [
   "./",
   "./index.html",
